@@ -5,14 +5,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest"
+    "vite": "latest"
   },
   "devDependencies": {
-    "tailwindcss": "latest",
-    "@tailwindcss/vite": "latest"
+    "@tailwindcss/vite": "latest",
+    "tailwindcss": "latest"
   }
 }

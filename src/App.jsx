@@ -3,7 +3,9 @@ import {
   ArrowRight,
   Bell,
   Car,
+  CalendarDays,
   ClipboardList,
+  Clock,
   Eye,
   LayoutDashboard,
   ParkingCircle,
@@ -11,15 +13,22 @@ import {
   Route,
   Save,
   Search,
+  Settings,
   Shuffle,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
+import { isSupabaseConfigured } from './lib/supabase.js';
 
 const NAV_ITEMS = [
   { section: 'main', page: 'dashboard', icon: LayoutDashboard },
   { section: 'main', page: 'students', icon: Users },
   { section: 'main', page: 'log', icon: ClipboardList },
+  { section: 'admin', page: 'settings', icon: Settings },
+  { section: 'admin', page: 'users', icon: UserPlus },
+  { section: 'admin', page: 'availabilityAdmin', icon: Clock },
+  { section: 'admin', page: 'schedule', icon: CalendarDays },
   { section: 'tools', page: 'manoeuvres', icon: Route },
   { section: 'tools', page: 'swap', icon: Shuffle },
 ];
@@ -130,21 +139,58 @@ const STUDENTS = [
   },
 ];
 
+const TEACHERS = [
+  { name: 'Marco Rossi', initials: 'MR', email: 'marco.rossi@patentepro.it', phone: '+39 320 111 2244', status: 'active', lessonsToday: 4 },
+  { name: 'Federica Marino', initials: 'FM', email: 'federica.marino@patentepro.it', phone: '+39 320 222 4411', status: 'active', lessonsToday: 2 },
+  { name: 'Luigi Costa', initials: 'LC', email: 'luigi.costa@patentepro.it', phone: '+39 320 333 1188', status: 'active', lessonsToday: 3 },
+  { name: 'Giorgio Esposito', initials: 'GE', email: 'giorgio.esposito@patentepro.it', phone: '+39 320 444 7788', status: 'invited', lessonsToday: 0 },
+];
+
+const CITY_ROUTES = [
+  { type: 'cityDriving', subTypes: [] },
+  { type: 'highwayDriving', subTypes: ['A7 Bolzaneto', 'A26 Ovada', 'A10 Pegli', 'A7 Ronco Scrivia'] },
+  { type: 'extraUrbanHills', subTypes: ['Passo della Bocchetta', 'Via Aurelia north', 'Via Aurelia south'] },
+  { type: 'parkingPractice', subTypes: [] },
+  { type: 'roundaboutPractice', subTypes: [] },
+];
+
+const ADMIN_AVAILABILITY = [
+  { teacher: 'Marco Rossi', mon: '09:00-13:00', tue: '09:00-13:00', wed: '14:00-18:00', thu: '09:00-13:00', fri: '14:00-18:00' },
+  { teacher: 'Federica Marino', mon: '09:00-12:00', tue: '-', wed: '09:00-13:00', thu: '15:00-19:00', fri: '09:00-12:00' },
+  { teacher: 'Luigi Costa', mon: '14:00-18:00', tue: '14:00-18:00', wed: '-', thu: '09:00-13:00', fri: '09:00-13:00' },
+  { teacher: 'Giorgio Esposito', mon: '-', tue: '10:00-12:00', wed: '10:00-12:00', thu: '-', fri: '15:00-18:00' },
+];
+
+const LESSONS = [
+  { time: '09:00', duration: 50, teacher: 'Marco Rossi', student: 'Giulia Ferretti', status: 'completed' },
+  { time: '10:00', duration: 60, teacher: 'Federica Marino', student: 'Sara Conti', status: 'scheduled' },
+  { time: '11:00', duration: 50, teacher: 'Marco Rossi', student: 'Luca Bianchi', status: 'completed' },
+  { time: '14:00', duration: 50, teacher: 'Marco Rossi', student: 'Marco Verdi', status: 'scheduled' },
+  { time: '15:30', duration: 60, teacher: 'Luigi Costa', student: 'Anna Moretti', status: 'scheduled' },
+];
+
 const COPY = {
   en: {
     appTitle: 'PatentePro',
     appSubtitle: 'Instructor management',
     instructor: 'Instructor',
     main: 'Main',
+    admin: 'Admin',
     tools: 'Tools',
     dashboard: 'Dashboard',
     students: 'Students',
     log: 'Log lesson',
+    settings: 'Settings',
+    users: 'Users',
+    availabilityAdmin: 'Availability',
+    schedule: 'Schedule',
     manoeuvres: 'Manoeuvres',
     swap: 'Slot swap',
     search: 'Search student...',
     newLesson: 'New lesson',
     notificationsNone: 'Notifications: no updates',
+    databaseConnected: 'DB connected',
+    databaseMock: 'Mock data',
     overview: 'Overview',
     overviewSub: 'Wednesday, May 22, 2026 - Instructor: Marco Rossi',
     activeStudents: 'Active students',
@@ -228,6 +274,59 @@ const COPY = {
     manoeuvresCat: 'Manoeuvres',
     roadCat: 'Road',
     errors: 'Mistakes made',
+    schoolSettings: 'School settings',
+    schoolSettingsSub: 'Configure the driving school profile, city routes, maneuvers, and error tags',
+    schoolProfile: 'School profile',
+    schoolName: 'School name',
+    cityLabel: 'City',
+    themeColor: 'Theme color',
+    logoUpload: 'Logo upload',
+    logoUploadHint: 'Drop logo file',
+    routeConfiguration: 'Route configuration',
+    requiresSubSelection: 'Requires sub-selection',
+    noSubSelection: 'No sub-selection',
+    maneuverCatalog: 'Maneuver catalog',
+    errorTagCatalog: 'Error tag catalog',
+    saveSettings: 'Save settings',
+    settingsSaved: 'Settings saved',
+    userManagement: 'User management',
+    userManagementSub: 'Invite teachers and students, edit contact details, and deactivate users',
+    inviteTeacher: 'Invite teacher',
+    inviteStudent: 'Invite student',
+    teachers: 'Teachers',
+    active: 'Active',
+    invited: 'Invited',
+    deactivate: 'Deactivate',
+    edit: 'Edit',
+    inviteSent: 'Invite email queued',
+    studentDirectory: 'Student directory',
+    availabilityPlanner: 'Teacher availability',
+    availabilityPlannerSub: 'Review weekly teaching windows before creating lessons',
+    weeklyGrid: 'Weekly grid',
+    mon: 'Mon',
+    tue: 'Tue',
+    wed: 'Wed',
+    thu: 'Thu',
+    fri: 'Fri',
+    setAvailability: 'Set availability',
+    availabilitySaved: 'Availability saved',
+    lessonSchedule: 'Lesson schedule',
+    lessonScheduleSub: 'Create lessons and review the calendar by teacher or by student',
+    newScheduledLesson: 'New scheduled lesson',
+    teacherView: 'By teacher',
+    studentView: 'By student',
+    pickTeacher: 'Pick teacher',
+    pickStudent: 'Pick student',
+    eligibleTeachers: 'Eligible teachers',
+    calendarView: 'Calendar view',
+    scheduledLessonSaved: 'Lesson scheduled',
+    routeList: 'Routes',
+    subRoutes: 'Sub-routes',
+    cityDriving: 'City driving',
+    highwayDriving: 'Highway driving',
+    extraUrbanHills: 'Extra-urban hills',
+    parkingPractice: 'Parking practice',
+    roundaboutPractice: 'Roundabout practice',
     belt: 'Seat belt',
     mirrors: 'Mirrors',
     priority: 'Priority',
@@ -290,15 +389,22 @@ const COPY = {
     appSubtitle: 'Gestione istruttori',
     instructor: 'Istruttore',
     main: 'Principale',
+    admin: 'Admin',
     tools: 'Strumenti',
     dashboard: 'Dashboard',
     students: 'Studenti',
     log: 'Registra lezione',
+    settings: 'Impostazioni',
+    users: 'Utenti',
+    availabilityAdmin: 'Disponibilità',
+    schedule: 'Calendario',
     manoeuvres: 'Manovre',
     swap: 'Scambio slot',
     search: 'Cerca studente...',
     newLesson: 'Nuova lezione',
     notificationsNone: 'Notifiche: nessun aggiornamento',
+    databaseConnected: 'DB connesso',
+    databaseMock: 'Dati mock',
     overview: 'Panoramica',
     overviewSub: 'Mercoledì 22 maggio 2026 - Istruttore: Marco Rossi',
     activeStudents: 'Studenti attivi',
@@ -382,6 +488,59 @@ const COPY = {
     manoeuvresCat: 'Manovre',
     roadCat: 'Strada',
     errors: 'Errori commessi',
+    schoolSettings: 'Impostazioni scuola',
+    schoolSettingsSub: 'Configura profilo scuola, percorsi cittadini, manovre e tag errore',
+    schoolProfile: 'Profilo scuola',
+    schoolName: 'Nome scuola',
+    cityLabel: 'Città',
+    themeColor: 'Colore tema',
+    logoUpload: 'Caricamento logo',
+    logoUploadHint: 'Trascina il logo',
+    routeConfiguration: 'Configurazione percorsi',
+    requiresSubSelection: 'Richiede sotto-selezione',
+    noSubSelection: 'Nessuna sotto-selezione',
+    maneuverCatalog: 'Catalogo manovre',
+    errorTagCatalog: 'Catalogo tag errore',
+    saveSettings: 'Salva impostazioni',
+    settingsSaved: 'Impostazioni salvate',
+    userManagement: 'Gestione utenti',
+    userManagementSub: 'Invita istruttori e studenti, modifica contatti e disattiva utenti',
+    inviteTeacher: 'Invita istruttore',
+    inviteStudent: 'Invita studente',
+    teachers: 'Istruttori',
+    active: 'Attivo',
+    invited: 'Invitato',
+    deactivate: 'Disattiva',
+    edit: 'Modifica',
+    inviteSent: 'Email di invito in coda',
+    studentDirectory: 'Elenco studenti',
+    availabilityPlanner: 'Disponibilità istruttori',
+    availabilityPlannerSub: 'Controlla le fasce settimanali prima di creare lezioni',
+    weeklyGrid: 'Griglia settimanale',
+    mon: 'Lun',
+    tue: 'Mar',
+    wed: 'Mer',
+    thu: 'Gio',
+    fri: 'Ven',
+    setAvailability: 'Imposta disponibilità',
+    availabilitySaved: 'Disponibilità salvata',
+    lessonSchedule: 'Calendario lezioni',
+    lessonScheduleSub: 'Crea lezioni e consulta il calendario per istruttore o studente',
+    newScheduledLesson: 'Nuova lezione programmata',
+    teacherView: 'Per istruttore',
+    studentView: 'Per studente',
+    pickTeacher: 'Seleziona istruttore',
+    pickStudent: 'Seleziona studente',
+    eligibleTeachers: 'Istruttori disponibili',
+    calendarView: 'Vista calendario',
+    scheduledLessonSaved: 'Lezione programmata',
+    routeList: 'Percorsi',
+    subRoutes: 'Sotto-percorsi',
+    cityDriving: 'Guida in città',
+    highwayDriving: 'Guida in autostrada',
+    extraUrbanHills: 'Extraurbano collinare',
+    parkingPractice: 'Pratica parcheggio',
+    roundaboutPractice: 'Pratica rotonde',
     belt: 'Cintura',
     mirrors: 'Specchietti',
     priority: 'Precedenza',
@@ -532,6 +691,9 @@ function TopHeader({ lang, setLang, navigate, showToast, t }) {
         />
       </div>
       <div className="flex items-center gap-2">
+        <Badge tone={isSupabaseConfigured ? 'green' : 'warn'}>
+          {isSupabaseConfigured ? t.databaseConnected : t.databaseMock}
+        </Badge>
         <SegmentedLanguage lang={lang} setLang={setLang} t={t} />
         <IconButton label="Notifications" onClick={() => showToast(t.notificationsNone)}>
           <Bell size={16} />
@@ -564,6 +726,10 @@ function SegmentedLanguage({ lang, setLang, t }) {
 function ActivePage({ page, navigate, showToast, t, lang }) {
   if (page === 'students') return <StudentsPage navigate={navigate} t={t} lang={lang} />;
   if (page === 'log') return <LessonLogPage showToast={showToast} t={t} />;
+  if (page === 'settings') return <SettingsPage showToast={showToast} t={t} />;
+  if (page === 'users') return <UsersPage showToast={showToast} t={t} lang={lang} />;
+  if (page === 'availabilityAdmin') return <AvailabilityAdminPage showToast={showToast} t={t} />;
+  if (page === 'schedule') return <SchedulePage showToast={showToast} t={t} />;
   if (page === 'manoeuvres') return <ManoeuvresPage t={t} />;
   if (page === 'swap') return <SwapPage showToast={showToast} t={t} />;
   return <DashboardPage navigate={navigate} t={t} />;
@@ -733,6 +899,258 @@ function LessonLogPage({ showToast, t }) {
           </Card>
         </div>
       </TwoColumnGrid>
+    </Page>
+  );
+}
+
+function SettingsPage({ showToast, t }) {
+  const maneuvers = ['hillStart', 'parallelParking', 'uTurn', 'safeOvertaking', 'motorway'];
+  const errorTags = ['mirrors', 'priority', 'distances', 'speed', 'brakes', 'indicators'];
+
+  return (
+    <Page>
+      <PageHeader
+        title={t.schoolSettings}
+        subtitle={t.schoolSettingsSub}
+        action={<Button primary onClick={() => showToast(`${t.settingsSaved} ✓`)}><Save size={16} />{t.saveSettings}</Button>}
+      />
+      <TwoColumnGrid>
+        <Card title={t.schoolProfile}>
+          <div className="grid gap-3 p-4">
+            <Field label={t.schoolName}><input className={fieldClass} defaultValue="Autoscuola Genova Centro" /></Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t.cityLabel}>
+                <select className={fieldClass} defaultValue="Genova">
+                  <option>Genova</option>
+                  <option>Milano</option>
+                  <option>Torino</option>
+                </select>
+              </Field>
+              <Field label={t.themeColor}><input className={fieldClass} type="color" defaultValue="#1a3a5c" /></Field>
+            </div>
+            <Field label={t.logoUpload}>
+              <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-line bg-[#f5f5f5] text-sm text-muted">
+                {t.logoUploadHint}
+              </div>
+            </Field>
+          </div>
+        </Card>
+        <Card title={t.routeConfiguration}>
+          <div className="divide-y divide-line">
+            {CITY_ROUTES.map((route) => (
+              <div key={route.type} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[13px] font-medium">{t[route.type]}</div>
+                  <Badge tone={route.subTypes.length ? 'warn' : 'green'}>
+                    {route.subTypes.length ? t.requiresSubSelection : t.noSubSelection}
+                  </Badge>
+                </div>
+                {route.subTypes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {route.subTypes.map((subType) => <Tag key={subType} passive active>{subType}</Tag>)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </TwoColumnGrid>
+      <TwoColumnGrid>
+        <Card title={t.maneuverCatalog}>
+          <div className="flex flex-wrap gap-1.5 p-4">
+            {maneuvers.map((key) => <Tag key={key} passive active>{t[key]}</Tag>)}
+          </div>
+        </Card>
+        <Card title={t.errorTagCatalog}>
+          <div className="flex flex-wrap gap-1.5 p-4">
+            {errorTags.map((key) => <Tag key={key} passive error active>{t[key]}</Tag>)}
+          </div>
+        </Card>
+      </TwoColumnGrid>
+    </Page>
+  );
+}
+
+function UsersPage({ showToast, t, lang }) {
+  return (
+    <Page>
+      <PageHeader
+        title={t.userManagement}
+        subtitle={t.userManagementSub}
+        action={
+          <div className="flex gap-2">
+            <Button onClick={() => showToast(t.inviteSent)}><Plus size={16} />{t.inviteStudent}</Button>
+            <Button primary onClick={() => showToast(t.inviteSent)}><UserPlus size={16} />{t.inviteTeacher}</Button>
+          </div>
+        }
+      />
+      <Card title={t.teachers}>
+        <div className="hidden grid-cols-[1.4fr_1.4fr_1fr_1fr_130px] gap-3 border-b border-line px-4 py-2 text-[11px] uppercase tracking-wide text-muted lg:grid">
+          <span>{t.name}</span>
+          <span>Email</span>
+          <span>Phone</span>
+          <span>{t.status}</span>
+          <span>{t.actions}</span>
+        </div>
+        {TEACHERS.map((teacher) => (
+          <div key={teacher.email} className="grid gap-3 border-b border-line px-4 py-3 text-[13px] last:border-b-0 lg:grid-cols-[1.4fr_1.4fr_1fr_1fr_130px] lg:items-center">
+            <div className="flex items-center gap-2.5">
+              <div className="grid size-8 place-items-center rounded-full bg-brand-light text-xs font-medium text-brand">{teacher.initials}</div>
+              <div>
+                <div className="font-medium">{teacher.name}</div>
+                <div className="text-[11px] text-muted">{teacher.lessonsToday} {t.lessonsToday.toLowerCase()}</div>
+              </div>
+            </div>
+            <div className="text-muted">{teacher.email}</div>
+            <div className="text-muted">{teacher.phone}</div>
+            <Badge tone={teacher.status === 'active' ? 'green' : 'warn'}>{t[teacher.status]}</Badge>
+            <div className="flex gap-1.5">
+              <Button small>{t.edit}</Button>
+              <Button small>{t.deactivate}</Button>
+            </div>
+          </div>
+        ))}
+      </Card>
+      <Card title={t.studentDirectory}>
+        {STUDENTS.map((student) => (
+          <div key={student.name} className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 text-[13px] last:border-b-0">
+            <div>
+              <div className="font-medium">{student.name}</div>
+              <div className="text-[11px] text-muted">{student.age} {t.ageYears} - {student.lessons} {t.lessons} - {t.last}: {student.lastLesson[lang]}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge tone={student.status === 'ready' ? 'green' : student.status === 'inProgress' ? 'warn' : 'blue'}>{t[student.status]}</Badge>
+              <Button small>{t.edit}</Button>
+            </div>
+          </div>
+        ))}
+      </Card>
+    </Page>
+  );
+}
+
+function AvailabilityAdminPage({ showToast, t }) {
+  const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
+
+  return (
+    <Page>
+      <PageHeader
+        title={t.availabilityPlanner}
+        subtitle={t.availabilityPlannerSub}
+        action={<Button primary onClick={() => showToast(`${t.availabilitySaved} ✓`)}><Save size={16} />{t.setAvailability}</Button>}
+      />
+      <Card title={t.weeklyGrid}>
+        <div className="overflow-x-auto">
+          <div className="min-w-[760px]">
+            <div className="grid grid-cols-[180px_repeat(5,1fr)] border-b border-line px-4 py-2 text-[11px] uppercase tracking-wide text-muted">
+              <span>{t.teacher}</span>
+              {days.map((day) => <span key={day}>{t[day]}</span>)}
+            </div>
+            {ADMIN_AVAILABILITY.map((row) => (
+              <div key={row.teacher} className="grid grid-cols-[180px_repeat(5,1fr)] border-b border-line px-4 py-3 text-[13px] last:border-b-0">
+                <div className="font-medium">{row.teacher}</div>
+                {days.map((day) => (
+                  <button
+                    key={day}
+                    className={`mr-2 rounded-md border px-2 py-1.5 text-left text-xs ${
+                      row[day] === '-' ? 'border-line bg-[#f5f5f5] text-muted' : 'border-success bg-success-light text-success'
+                    }`}
+                    onClick={() => showToast(t.availabilitySaved)}
+                  >
+                    {row[day]}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+      <TwoColumnGrid>
+        <Card title={t.eligibleTeachers}>
+          {TEACHERS.filter((teacher) => teacher.status === 'active').map((teacher) => (
+            <InstructorRow key={teacher.email} name={teacher.name} availability={`${teacher.lessonsToday} ${t.lessonsToday.toLowerCase()}`} tone="green" t={t} showToast={showToast} />
+          ))}
+        </Card>
+        <Card title={t.routeConfiguration}>
+          <div className="p-4 text-[13px] text-muted">
+            {CITY_ROUTES.length} {t.routeList.toLowerCase()} - {CITY_ROUTES.filter((route) => route.subTypes.length).length} {t.subRoutes.toLowerCase()}
+          </div>
+        </Card>
+      </TwoColumnGrid>
+    </Page>
+  );
+}
+
+function SchedulePage({ showToast, t }) {
+  const [view, setView] = useState('teacherView');
+
+  return (
+    <Page>
+      <PageHeader
+        title={t.lessonSchedule}
+        subtitle={t.lessonScheduleSub}
+        action={
+          <div className="flex gap-1">
+            <Pill active={view === 'teacherView'} onClick={() => setView('teacherView')}>{t.teacherView}</Pill>
+            <Pill active={view === 'studentView'} onClick={() => setView('studentView')}>{t.studentView}</Pill>
+          </div>
+        }
+      />
+      <TwoColumnGrid>
+        <Card title={t.newScheduledLesson}>
+          <div className="grid gap-3 p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t.date}><input className={fieldClass} type="date" defaultValue="2026-05-22" /></Field>
+              <Field label={t.duration}>
+                <select className={fieldClass} defaultValue="60">
+                  <option value="30">30</option>
+                  <option value="45">45</option>
+                  <option value="60">60</option>
+                  <option value="90">90</option>
+                </select>
+              </Field>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t.pickTeacher}>
+                <select className={fieldClass}>{TEACHERS.filter((teacher) => teacher.status === 'active').map((teacher) => <option key={teacher.email}>{teacher.name}</option>)}</select>
+              </Field>
+              <Field label={t.pickStudent}>
+                <select className={fieldClass}>{STUDENTS.map((student) => <option key={student.name}>{student.name}</option>)}</select>
+              </Field>
+            </div>
+            <Button primary onClick={() => showToast(`${t.scheduledLessonSaved} ✓`)}><Plus size={16} />{t.newScheduledLesson}</Button>
+          </div>
+        </Card>
+        <Card title={t.eligibleTeachers}>
+          {TEACHERS.filter((teacher) => teacher.status === 'active').map((teacher) => (
+            <div key={teacher.email} className="flex items-center justify-between border-b border-line px-4 py-3 text-[13px] last:border-b-0">
+              <div>
+                <div className="font-medium">{teacher.name}</div>
+                <div className="text-[11px] text-muted">{teacher.email}</div>
+              </div>
+              <Badge tone="green">{t.active}</Badge>
+            </div>
+          ))}
+        </Card>
+      </TwoColumnGrid>
+      <Card title={`${t.calendarView} - ${t[view]}`}>
+        <div className="grid border-b border-line bg-[#f5f5f5] px-4 py-2 text-[11px] uppercase tracking-wide text-muted lg:grid-cols-[90px_1.4fr_1.4fr_1fr_1fr]">
+          <span>Time</span>
+          <span>{t.teacher}</span>
+          <span>{t.student}</span>
+          <span>{t.duration}</span>
+          <span>{t.status}</span>
+        </div>
+        {LESSONS.map((lesson) => (
+          <div key={`${lesson.time}-${lesson.student}`} className="grid gap-2 border-b border-line px-4 py-3 text-[13px] last:border-b-0 lg:grid-cols-[90px_1.4fr_1.4fr_1fr_1fr] lg:items-center">
+            <div className="font-medium text-brand-mid">{lesson.time}</div>
+            <div>{view === 'teacherView' ? lesson.teacher : lesson.student}</div>
+            <div className="text-muted">{view === 'teacherView' ? lesson.student : lesson.teacher}</div>
+            <div className="text-muted">{lesson.duration} min</div>
+            <Badge tone={lesson.status === 'completed' ? 'green' : 'blue'}>{t[lesson.status]}</Badge>
+          </div>
+        ))}
+      </Card>
     </Page>
   );
 }
@@ -1045,8 +1463,15 @@ function Tag({ children, active, error, passive, tone, onClick }) {
   );
 }
 
-function Pill({ children, active }) {
-  return <button className={`rounded-full border px-3 py-1.5 text-xs ${active ? 'border-brand bg-brand text-white' : 'border-line bg-white text-muted'}`}>{children}</button>;
+function Pill({ children, active, onClick }) {
+  return (
+    <button
+      className={`rounded-full border px-3 py-1.5 text-xs ${active ? 'border-brand bg-brand text-white' : 'border-line bg-white text-muted'}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 }
 
 function Dot({ tone }) {
