@@ -35,7 +35,7 @@ export default function UsersPage({ showToast, t, lang }) {
     return (
       <Page>
         <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Loading…
+          Loadingï¿½
         </div>
       </Page>
     );
@@ -100,7 +100,7 @@ export default function UsersPage({ showToast, t, lang }) {
             <div>
               <div className="font-medium">{student.full_name}</div>
               <div className="text-[11px] text-muted">
-                — · 0 {t.lessons} · {t.last}: recent
+                ï¿½ ï¿½ 0 {t.lessons} ï¿½ {t.last}: recent
               </div>
             </div>
             <div className="flex items-center gap-2">
