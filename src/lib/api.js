@@ -41,6 +41,44 @@ export async function listTeacherAvailability({ teacherId } = {}) {
   return data;
 }
 
+export async function getTenant({ tenantId } = {}) {
+  const client = requireSupabase();
+  const { data, error } = await client.from('tenants').select('*').eq('id', tenantId).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listRouteTypesForTenant({ tenantId } = {}) {
+  const client = requireSupabase();
+  const tenant = await getTenant({ tenantId });
+  const { data, error } = await client
+    .from('route_types')
+    .select('*, route_sub_types(*)')
+    .eq('city_id', tenant.city_id)
+    .order('name');
+
+  if (error) throw error;
+  return data;
+}
+
+export async function listManeuvers({ tenantId } = {}) {
+  const client = requireSupabase();
+  let query = client.from('maneuvers').select('*').order('order_index');
+  query = byTenant(query, tenantId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function listErrorTags({ tenantId } = {}) {
+  const client = requireSupabase();
+  let query = client.from('error_tags').select('*').order('label');
+  query = byTenant(query, tenantId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
 export async function listRoutesForCity(cityId) {
   const client = requireSupabase();
   const { data, error } = await client
