@@ -170,7 +170,82 @@ Upcoming work:
 
 ## Supabase Progress
 
-* Supabase configuration is now setup successfully.
-* Demo Supabase user was added.
-* Login flow has been verified successfully.
-* We are now moving mocked demo data into seeded database tables so the app does not lose any demo content and is connected to real DB data.
+* ✅ Supabase configuration is now setup successfully.
+* ✅ Demo Supabase user was added.
+* ✅ Login flow has been verified successfully.
+* ✅ Admin user creation system implemented (June 9, 2026)
+* ✅ User management UI with modal forms added
+* ✅ Auth store enhanced with automatic tenant_id fetching
+* 🔄 Moving mocked demo data into seeded database tables
+
+### Admin User Creation System (June 9, 2026)
+
+**Problem Solved:**
+- Needed a way for admins to create teachers/students
+- Required coordination between `auth.users` (Supabase Auth) and `public.users` (application data)
+- Users logged in without `tenant_id` in metadata caused creation failures
+
+**Solution Implemented:**
+
+1. **New Files Created:**
+   - `src/lib/adminApi.js` - Admin API functions using service role key
+   - `supabase/migrations/202606090004_ensure_admin_user.sql` - Admin user sync
+
+2. **Updated Files:**
+   - `src/pages/UsersPage.jsx` - Added user creation modal and form
+   - `src/lib/auth.js` - Added `updateUserMetadata()` function
+   - `src/store/useAuthStore.js` - Auto-fetches tenant_id from DB if missing
+   - `.env.local` - Added `VITE_SUPABASE_SERVICE_ROLE_KEY`
+
+3. **Data Flow:**
+   ```
+   Admin fills form → Supabase Admin API creates auth.users
+                    → Code inserts into public.users with same ID
+                    → Stores tenant_id in auth metadata
+   ```
+
+4. **Functions Available:**
+   - `createUser()` - Creates auth + public.users entries
+   - `sendPasswordResetEmail()` - Send password reset links
+   - `deleteUser()` - Remove users from both tables
+   - Auto tenant_id fetching on login/init
+
+5. **How to Use:**
+   1. Run migration `202606090004_ensure_admin_user.sql` in Supabase SQL Editor
+   2. Add service role key to `.env.local`
+   3. Restart dev server
+   4. Login as admin
+   5. Navigate to Users page
+   6. Click "Invite Teacher" or "Invite Student"
+   7. Fill form and submit
+
+6. **User Creation Flow:**
+   ```
+   ┌──────────────────┐
+   │  Admin Form      │
+   │  (React App)     │
+   └────────┬─────────┘
+            │ createUser() called
+            ▼
+   ┌──────────────────────────────────┐
+   │  Supabase Admin API              │
+   │  (service_role_key required)     │
+   └────────┬─────────────────────────┘
+            │ Creates auth user
+            ▼
+   ┌──────────────────────────────────┐
+   │  auth.users (Supabase managed)   │
+   │  - id: uuid                      │
+   │  - email: john@school.com        │
+   │  - encrypted_password: ...       │
+   └────────┬─────────────────────────┘
+            │ Returns user ID
+            ▼
+   ┌──────────────────────────────────┐
+   │  public.users (Your table)       │
+   │  - id: (FK to auth.users)       │
+   │  - tenant_id: ...                │
+   │  - role: teacher/student        │
+   │  - full_name, email, phone       │
+   └──────────────────────────────────┘
+   ```

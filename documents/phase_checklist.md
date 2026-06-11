@@ -24,10 +24,14 @@
 * [x] Configure .env.local
 * [x] Add VITE_SUPABASE_URL
 * [x] Add VITE_SUPABASE_ANON_KEY
-* [ ] Run migration SQL
-* [ ] Enable email auth
+* [x] Add VITE_SUPABASE_SERVICE_ROLE_KEY
+* [x] Run migration SQL
+* [x] Enable email auth
 * [x] Verify authentication
-* [ ] Seed mock data into database
+* [x] **Admin user creation system** (June 9, 2026)
+* [x] **User management UI with modal forms**
+* [x] **Auto tenant_id fetching from database**
+* [x] Seed mock data into database
 * [ ] Replace mock data with live queries
 
 Notes:

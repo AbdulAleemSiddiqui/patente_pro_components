@@ -9,6 +9,7 @@ import AvailabilityPage from './pages/AvailabilityPage.jsx';
 import SchedulePage     from './pages/SchedulePage.jsx';
 import ManoeuvresPage   from './pages/ManoeuvresPage.jsx';
 import SwapPage         from './pages/SwapPage.jsx';
+import ProfilePage      from './pages/ProfilePage.jsx';
 
 const COPY = {
   en: {
@@ -113,6 +114,7 @@ const COPY = {
     swapHistory: 'Swap history',
     freeMonWed: 'Free: Mon–Wed morning', freeThu: 'Free: Thursday afternoon',
     partlyAvailable: 'Partially available', completedStatus: 'Completed', language: 'Language',
+    profile: 'Profile',
   },
   it: {
     appTitle: 'PatentePro', appSubtitle: 'Gestione istruttori', instructor: 'Istruttore',
@@ -214,6 +216,7 @@ const COPY = {
     swapHistory: 'Storico swap',
     freeMonWed: 'Libera: lun–mer mattina', freeThu: 'Libero: giovedì pomeriggio',
     partlyAvailable: 'Parzialmente disponibile', completedStatus: 'Completato', language: 'Lingua',
+    profile: 'Profilo',
   },
 };
 
@@ -235,15 +238,16 @@ export default function App() {
 
   return (
     <Layout page={page} navigate={navigate} lang={lang} setLang={setLang} showToast={showToast} toast={toast} t={t}>
-      {page === 'students'          && <StudentsPage     {...pageProps} />}
-      {page === 'log'               && <LessonLogPage    {...pageProps} />}
-      {page === 'settings'          && <SettingsPage     {...pageProps} />}
-      {page === 'users'             && <UsersPage        {...pageProps} />}
-      {page === 'availabilityAdmin' && <AvailabilityPage {...pageProps} />}
-      {page === 'schedule'          && <SchedulePage     {...pageProps} />}
-      {page === 'manoeuvres'        && <ManoeuvresPage   {...pageProps} />}
-      {page === 'swap'              && <SwapPage         {...pageProps} />}
-      {!['students','log','settings','users','availabilityAdmin','schedule','manoeuvres','swap'].includes(page) && (
+      {page === 'students'     && <StudentsPage     {...pageProps} />}
+      {page === 'log'          && <LessonLogPage    {...pageProps} />}
+      {page === 'settings'     && <SettingsPage     {...pageProps} />}
+      {page === 'users'        && <UsersPage        {...pageProps} />}
+      {page === 'availability' && <AvailabilityPage {...pageProps} />}
+      {page === 'schedule'     && <SchedulePage     {...pageProps} />}
+      {page === 'manoeuvres'   && <ManoeuvresPage   {...pageProps} />}
+      {page === 'swap'         && <SwapPage         {...pageProps} />}
+      {page === 'profile'      && <ProfilePage      {...pageProps} />}
+      {!['students','log','settings','users','availability','schedule','manoeuvres','swap','profile'].includes(page) && (
         <DashboardPage {...pageProps} />
       )}
     </Layout>
