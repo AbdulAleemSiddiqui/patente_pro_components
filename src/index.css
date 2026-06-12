@@ -336,7 +336,6 @@ textarea {
   background-color: var(--color-shell);
 }
 
-/* Clickable dates in month view */
 .rbc-date-cell {
   cursor: pointer;
 }
@@ -345,3 +344,7 @@ textarea {
   background-color: var(--color-brand-light);
 }
 
+.rbc-month-view .rbc-row-bg .rbc-day-bg:hover{
+  background-color: #f9fafb;
+  cursor: pointer;
+}

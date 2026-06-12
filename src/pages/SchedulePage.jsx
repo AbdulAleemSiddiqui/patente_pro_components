@@ -276,42 +276,42 @@ export default function SchedulePage({ showToast, t }) {
     );
   };
 
-  // Custom day cell for month view
-  const MonthDateCell = ({ date: dateProp, ...props }) => {
-    const date = new Date(dateProp);
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const isCurrentMonth = date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
+  const isToday = dateProp.toDateString() === new Date().toDateString();
 
-    const dayEvents = filteredEvents.filter(event => {
-      const eventDate = new Date(event.start);
-      return (
-        eventDate.getDate() === date.getDate() &&
-        eventDate.getMonth() === date.getMonth() &&
-        eventDate.getFullYear() === date.getFullYear()
-      );
-    });
-
-    const isToday = date.toDateString() === new Date().toDateString();
-
+  const dayLessonCount = filteredEvents.filter(event => {
+    const eventDate = new Date(event.start);
     return (
-      <div
-        className={`h-full flex flex-col items-center justify-center p-2 ${
-          isCurrentMonth ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-30 cursor-not-allowed'
-        }`}
-        onClick={() => isCurrentMonth && handleViewChange(Views.DAY)}
-      >
-        <div className={`text-xl font-bold ${isToday ? 'bg-brand text-white rounded-full w-10 h-10 flex items-center justify-center' : ''}`}>
-          {date.getDate()}
-        </div>
-        {isCurrentMonth && dayEvents.length > 0 && (
-          <div className="text-xs text-muted text-center mt-1">
-            {dayEvents.length} {dayEvents.length === 1 ? 'lesson' : 'lessons'}
-          </div>
-        )}
-      </div>
+      eventDate.getDate() === dateProp.getDate() &&
+      eventDate.getMonth() === dateProp.getMonth() &&
+      eventDate.getFullYear() === dateProp.getFullYear()
     );
+  }).length;
+
+  const handleClick = () => {
+    setDate(dateProp);
+    setView(Views.DAY);
   };
+
+  return (
+    <div
+      className="absolute inset-0 flex flex-col items-center justify-center py-1 cursor-pointer hover:bg-gray-100 rounded transition"
+      onClick={handleClick}
+    >
+      <div
+        className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full
+          ${isToday ? 'bg-brand text-white' : 'text-ink'}`}
+      >
+        {dateProp.getDate()}
+      </div>
+      {dayLessonCount > 0 && (
+        <div className="text-xs font-medium text-muted mt-0.9">
+          {dayLessonCount} {dayLessonCount === 1 ? 'Lesson' : 'Lessons'}
+        </div>
+      )}
+    </div>
+  );
+}, [filteredEvents, setDate, setView]);
 
   // Custom toolbar component
   const CustomToolbar = ({ label, onNavigate, onView }) => {
@@ -427,14 +427,12 @@ export default function SchedulePage({ showToast, t }) {
               event: EventComponent,
               toolbar: CustomToolbar,
               month: {
-                dateCell: MonthDateCell,
-                header: ({ date, localizer }) => {
-                  return (
-                    <div className="text-center text-xs font-medium uppercase tracking-wide text-muted">
-                      {format(date, 'EEE')}
-                    </div>
-                  );
-                },
+                dateHeader: MonthDateHeader,
+                header: ({ date, localizer }) => (
+                  <div className="text-center text-xs font-medium uppercase tracking-wide text-muted">
+                    {format(date, 'EEE')}
+                  </div>
+                ),
               },
             }}
             formats={{
