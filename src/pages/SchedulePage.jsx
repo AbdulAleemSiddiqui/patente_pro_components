@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Calendar, dateFnsLocalizer, Views, momentLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
-import { enUS } from 'date-fns/locale';
+import { enUS, it } from 'date-fns/locale';
 import { Plus, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Badge, Button, Card, Page, PageHeader, Field } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
@@ -15,10 +15,11 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales: {
     'en-US': enUS,
+    it,
   },
 });
 
-export default function SchedulePage({ showToast, t }) {
+export default function SchedulePage({ showToast, t, lang }) {
   const { tenantId, role, session } = useAuthStore();
   const [view, setView] = useState('month');
   const [date, setDate] = useState(new Date());
@@ -265,7 +266,6 @@ export default function SchedulePage({ showToast, t }) {
 
     return (
       <div className={`h-full rounded ${colors[colorIndex]} p-1.5 text-xs overflow-hidden`}>
-        <div className="font-bold truncate">{initials}</div>
         <div className="truncate opacity-90">{student?.full_name?.split(' ')[0]}</div>
         {view !== 'month' && (
           <div className="truncate text-[10px] opacity-75">
@@ -276,22 +276,40 @@ export default function SchedulePage({ showToast, t }) {
     );
   };
 
-const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
+  const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
   const isToday = dateProp.toDateString() === new Date().toDateString();
 
-  const dayLessonCount = filteredEvents.filter(event => {
+  const dayEvents = filteredEvents.filter(event => {
     const eventDate = new Date(event.start);
     return (
       eventDate.getDate() === dateProp.getDate() &&
       eventDate.getMonth() === dateProp.getMonth() &&
       eventDate.getFullYear() === dateProp.getFullYear()
     );
-  }).length;
+  });
+
+  const dayLessonCount = dayEvents.length;
 
   const handleClick = () => {
     setDate(dateProp);
     setView(Views.DAY);
   };
+
+  // Choose color based on first event of the day (matches EventComponent logic)
+  const colors = [
+    'bg-blue-500 text-white',
+    'bg-green-500 text-white',
+    'bg-purple-500 text-white',
+    'bg-orange-500 text-white',
+    'bg-pink-500 text-white',
+    'bg-teal-500 text-white',
+    'bg-indigo-500 text-white',
+  ];
+
+  const firstEvent = dayEvents[0];
+  const colorIndex = firstEvent && firstEvent.student && firstEvent.student.id
+    ? firstEvent.student.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
+    : 0;
 
   return (
     <div
@@ -305,8 +323,10 @@ const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
         {dateProp.getDate()}
       </div>
       {dayLessonCount > 0 && (
-        <div className="text-xs font-medium text-muted mt-0.9">
-          {dayLessonCount} {dayLessonCount === 1 ? 'Lesson' : 'Lessons'}
+        <div className={`mt-0.9`}> 
+          <div className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors[colorIndex]}`}>
+            {dayLessonCount} {dayLessonCount === 1 ? (t.lesson || 'Lesson') : (t.lessons || 'Lessons')}
+          </div>
         </div>
       )}
     </div>
@@ -322,7 +342,7 @@ const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
             type="button"
             onClick={navigateToPrev}
             className="p-1.5 rounded hover:bg-gray-100 transition"
-            title="Previous"
+            title={t.previous || 'Previous'}
           >
             <ChevronLeft size={18} />
           </button>
@@ -331,13 +351,13 @@ const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
             onClick={navigateToToday}
             className="px-3 py-1.5 text-sm rounded hover:bg-gray-100 font-medium transition"
           >
-            Today
+            {t.today || 'Today'}
           </button>
           <button
             type="button"
             onClick={navigateToNext}
             className="p-1.5 rounded hover:bg-gray-100 transition"
-            title="Next"
+            title={t.next || 'Next'}
           >
             <ChevronRight size={18} />
           </button>
@@ -351,7 +371,7 @@ const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
               value={selectedTeacher}
               onChange={(e) => setSelectedTeacher(e.target.value)}
             >
-              <option value="all">All Teachers</option>
+              <option value="all">{t.allTeachers || 'All Teachers'}</option>
               {teachers.map((teacher) => (
                 <option key={teacher.id} value={teacher.id}>
                   {teacher.full_name}
@@ -372,7 +392,7 @@ const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
                     : 'text-muted hover:text-ink'
                 }`}
               >
-                {v}
+                {t[v] || v}
               </button>
             ))}
           </div>
@@ -403,7 +423,7 @@ const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
               setDate(new Date());
             }}>
               <Plus size={16} />
-              New Lesson
+              {t.newLesson}
             </Button>
           )
         }
@@ -413,6 +433,7 @@ const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
         <div className="p-4">
           <Calendar
             localizer={localizer}
+            culture={lang === 'it' ? 'it' : 'en-US'}
             events={filteredEvents}
             startAccessor="start"
             endAccessor="end"
@@ -430,22 +451,27 @@ const MonthDateHeader = useCallback(({ date: dateProp, label }) => {
                 dateHeader: MonthDateHeader,
                 header: ({ date, localizer }) => (
                   <div className="text-center text-xs font-medium uppercase tracking-wide text-muted">
-                    {format(date, 'EEE')}
+                    {format(date, 'EEE', { locale: lang === 'it' ? it : enUS })}
                   </div>
                 ),
               },
+            }}
+            messages={{
+              date: t.date || 'Date',
+              time: t.time || 'Time',
+              event: t.event || 'Event',
             }}
             formats={{
               monthHeaderFormat: 'MMMM yyyy',
               weekdayFormat: 'EEE',
               dayFormat: 'EEE',
               agendaTimeRangeFormat: ({ start, end }) => {
-                return `${format(start, 'h:mma')} – ${format(end, 'h:mma')}`;
+                return `${format(start, 'h:mma', { locale: lang === 'it' ? it : enUS })} – ${format(end, 'h:mma', { locale: lang === 'it' ? it : enUS })}`;
               },
               timeGutterFormat: 'ha',
               selectRangeFormat: ({ start, end }) => {
                 const formatStr = 'MMM d, h:mma';
-                return `${format(start, formatStr)} – ${format(end, formatStr)}`;
+                return `${format(start, formatStr, { locale: lang === 'it' ? it : enUS })} – ${format(end, formatStr, { locale: lang === 'it' ? it : enUS })}`;
               },
               dateFormat: 'MMM d, yyyy',
               timeGutterFormat: 'ha',
