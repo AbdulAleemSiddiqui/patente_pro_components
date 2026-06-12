@@ -5,7 +5,6 @@ import StudentsPage     from './pages/StudentsPage.jsx';
 import LessonLogPage    from './pages/LessonLogPage.jsx';
 import SettingsPage     from './pages/SettingsPage.jsx';
 import UsersPage        from './pages/UsersPage.jsx';
-import AvailabilityPage from './pages/AvailabilityPage.jsx';
 import SchedulePage     from './pages/SchedulePage.jsx';
 import ManoeuvresPage   from './pages/ManoeuvresPage.jsx';
 import SwapPage         from './pages/SwapPage.jsx';
@@ -246,12 +245,11 @@ export default function App() {
       {page === 'log'          && <LessonLogPage    {...pageProps} />}
       {page === 'settings'     && <SettingsPage     {...pageProps} />}
       {page === 'users'        && <UsersPage        {...pageProps} />}
-      {page === 'availability' && <AvailabilityPage {...pageProps} />}
       {page === 'schedule'     && <SchedulePage     {...pageProps} />}
       {page === 'manoeuvres'   && <ManoeuvresPage   {...pageProps} />}
       {page === 'swap'         && <SwapPage         {...pageProps} />}
       {page === 'profile'      && <ProfilePage      {...pageProps} />}
-      {!['students','log','settings','users','availability','schedule','manoeuvres','swap','profile'].includes(page) && (
+      {!['students','log','settings','users','schedule','manoeuvres','swap','profile'].includes(page) && (
         <DashboardPage {...pageProps} />
       )}
     </Layout>

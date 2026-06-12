@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Save } from 'lucide-react';
+import { format } from 'date-fns';
 import {
   Button, Card, Field, fieldClass, Page, PageHeader,
   Stars, Tag, TwoColumnGrid,
@@ -26,7 +27,7 @@ function toggleSet(setter, key) {
 }
 
 export default function LessonLogPage({ showToast, t }) {
-  const { tenantId } = useAuthStore();
+  const { tenantId, role, session } = useAuthStore();
   const [students, setStudents] = useState([]);
   const [routes, setRoutes] = useState(new Set(['city']));
   const [errors, setErrors] = useState(new Set(['mirrors', 'distances']));
@@ -37,6 +38,7 @@ export default function LessonLogPage({ showToast, t }) {
   const [duration, setDuration] = useState(50);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
+  const [prefilledLesson, setPrefilledLesson] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -57,6 +59,30 @@ export default function LessonLogPage({ showToast, t }) {
     })();
   }, [tenantId]);
 
+  // Load pre-filled lesson data from sessionStorage
+  useEffect(() => {
+    const feedbackLesson = sessionStorage.getItem('feedbackLesson');
+    if (feedbackLesson) {
+      try {
+        const lessonData = JSON.parse(feedbackLesson);
+        setPrefilledLesson(lessonData);
+
+        // Populate fields with lesson data
+        if (lessonData.studentId) setStudentId(lessonData.studentId);
+        if (lessonData.scheduledAt) {
+          const lessonDate = new Date(lessonData.scheduledAt);
+          setDate(lessonDate.toISOString().slice(0, 10));
+        }
+        if (lessonData.duration) setDuration(lessonData.duration);
+
+        // Clear sessionStorage after loading
+        sessionStorage.removeItem('feedbackLesson');
+      } catch (error) {
+        console.error('Failed to parse feedback lesson data:', error);
+      }
+    }
+  }, []);
+
   if (loading) {
     return (
       <Page>
@@ -73,37 +99,61 @@ export default function LessonLogPage({ showToast, t }) {
       <TwoColumnGrid>
         <Card title={t.lessonDetails}>
           <div className="flex flex-col gap-3 p-4">
+            {prefilledLesson && (
+              <div className="mb-2">
+                <div className="text-xs text-muted mb-1">Instructor</div>
+                <div className="text-sm font-medium">{prefilledLesson.teacherName}</div>
+              </div>
+            )}
             <Field label={t.student}>
-              <select
-                className={fieldClass}
-                value={studentId}
-                onChange={(event) => setStudentId(event.target.value)}
-              >
-                {students.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.full_name}
-                  </option>
-                ))}
-              </select>
+              {prefilledLesson ? (
+                <div className="text-sm font-medium py-2">
+                  {prefilledLesson.studentName}
+                </div>
+              ) : (
+                <select
+                  className={fieldClass}
+                  value={studentId}
+                  onChange={(event) => setStudentId(event.target.value)}
+                >
+                  {students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.full_name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </Field>
             <div className="grid gap-2.5 sm:grid-cols-2">
               <Field label={t.date}>
-                <input
-                  className={fieldClass}
-                  type="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                />
+                {prefilledLesson ? (
+                  <div className="text-sm font-medium py-2">
+                    {format(new Date(prefilledLesson.scheduledAt), 'MMM d, yyyy')}
+                  </div>
+                ) : (
+                  <input
+                    className={fieldClass}
+                    type="date"
+                    value={date}
+                    onChange={(event) => setDate(event.target.value)}
+                  />
+                )}
               </Field>
               <Field label={t.duration}>
-                <input
-                  className={fieldClass}
-                  type="number"
-                  value={duration}
-                  min="30"
-                  max="120"
-                  onChange={(event) => setDuration(Number(event.target.value))}
-                />
+                {prefilledLesson ? (
+                  <div className="text-sm font-medium py-2">
+                    {prefilledLesson.duration} min
+                  </div>
+                ) : (
+                  <input
+                    className={fieldClass}
+                    type="number"
+                    value={duration}
+                    min="30"
+                    max="120"
+                    onChange={(event) => setDuration(Number(event.target.value))}
+                  />
+                )}
               </Field>
             </div>
             <Field label={t.routeType}>

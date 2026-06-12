@@ -8,7 +8,6 @@ export const NAV_ITEMS = [
   // Main section - core functionality
   { section: 'main',  page: 'dashboard',        icon: 'LayoutDashboard', label: 'Dashboard' },
   { section: 'main',  page: 'schedule',         icon: 'CalendarDays',      label: 'Schedule' },
-  { section: 'main',  page: 'availability',     icon: 'Clock',             label: 'Availability' },
 
   // Admin section - only admins see these
   { section: 'admin', page: 'students',         icon: 'Users',              label: 'Students' },
@@ -31,7 +30,6 @@ export const ROLE_ACCESS = {
   admin: [
     'dashboard',
     'schedule',
-    'availability',
     'students',
     'users',
     'log',
@@ -44,7 +42,6 @@ export const ROLE_ACCESS = {
   teacher: [
     'dashboard',
     'schedule',       // Their lesson schedule
-    'availability',   // Their availability settings
     'students',       // List of students (read-only)
     'manoeuvres',     // View maneuvers
     'swap',           // Request swaps
