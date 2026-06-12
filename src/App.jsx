@@ -9,6 +9,7 @@ import AvailabilityPage from './pages/AvailabilityPage.jsx';
 import SchedulePage     from './pages/SchedulePage.jsx';
 import ManoeuvresPage   from './pages/ManoeuvresPage.jsx';
 import SwapPage         from './pages/SwapPage.jsx';
+import ProfilePage      from './pages/ProfilePage.jsx';
 
 const COPY = {
   en: {
@@ -49,7 +50,7 @@ const COPY = {
     priorityWarn: 'Priority warning', clutchOk: 'Clutch ok', brakesOk: 'Brakes ok',
     attitudeOk: 'Attitude ok', parkingOk: 'Parking ok', speedWarn: 'Speed warning',
     logSub: 'Complete the report after each driving session',
-    lessonDetails: 'Lesson details', date: 'Date', duration: 'Duration (min)',
+    lessonDetails: 'Lesson details', date: 'Date', time: 'Time', event: 'Event', duration: 'Duration (min)',
     routeType: 'Route type', city: 'City', extraUrban: 'Extra-urban',
     highway: 'Motorway', parking: 'Parking', night: 'Night',
     generalRating: 'General rating', instructorNotes: 'Instructor notes',
@@ -81,7 +82,9 @@ const COPY = {
     newScheduledLesson: 'New scheduled lesson',
     teacherView: 'By teacher', studentView: 'By student',
     pickTeacher: 'Pick teacher', pickStudent: 'Pick student',
-    eligibleTeachers: 'Eligible teachers', calendarView: 'Calendar view',
+    eligibleTeachers: 'Eligible teachers', allTeachers: 'All Teachers', calendarView: 'Calendar view',
+    lesson: 'Lesson', month: 'Month', week: 'Week', day: 'Day', agenda: 'Agenda',
+    today: 'Today', previous: 'Previous', next: 'Next',
     scheduledLessonSaved: 'Lesson scheduled',
     routeList: 'Routes', subRoutes: 'Sub-routes',
     cityDriving: 'City driving', highwayDriving: 'Highway driving',
@@ -113,6 +116,7 @@ const COPY = {
     swapHistory: 'Swap history',
     freeMonWed: 'Free: Mon–Wed morning', freeThu: 'Free: Thursday afternoon',
     partlyAvailable: 'Partially available', completedStatus: 'Completed', language: 'Language',
+    profile: 'Profile',
   },
   it: {
     appTitle: 'PatentePro', appSubtitle: 'Gestione istruttori', instructor: 'Istruttore',
@@ -151,7 +155,7 @@ const COPY = {
     priorityWarn: 'Precedenze critiche', clutchOk: 'Frizione ok', brakesOk: 'Freni ok',
     attitudeOk: 'Atteggiamento ok', parkingOk: 'Parcheggio ok', speedWarn: 'Velocità critica',
     logSub: 'Compila il report dopo ogni sessione di guida',
-    lessonDetails: 'Dettagli lezione', date: 'Data', duration: 'Durata (min)',
+    lessonDetails: 'Dettagli lezione', date: 'Data', time: 'Ora', event: 'Evento', duration: 'Durata (min)',
     routeType: 'Tipo di percorso', city: 'Città', extraUrban: 'Extraurbano',
     highway: 'Autostrada', parking: 'Parcheggio', night: 'Notturno',
     generalRating: 'Valutazione generale', instructorNotes: 'Note istruttore',
@@ -183,7 +187,9 @@ const COPY = {
     newScheduledLesson: 'Nuova lezione programmata',
     teacherView: 'Per istruttore', studentView: 'Per studente',
     pickTeacher: 'Seleziona istruttore', pickStudent: 'Seleziona studente',
-    eligibleTeachers: 'Istruttori disponibili', calendarView: 'Vista calendario',
+    eligibleTeachers: 'Istruttori disponibili', allTeachers: 'Tutti gli istruttori', calendarView: 'Vista calendario',
+    lesson: 'Lezione', month: 'Mese', week: 'Settimana', day: 'Giorno', agenda: 'Agenda',
+    today: 'Oggi', previous: 'Precedente', next: 'Successivo',
     scheduledLessonSaved: 'Lezione programmata',
     routeList: 'Percorsi', subRoutes: 'Sotto-percorsi',
     cityDriving: 'Guida in città', highwayDriving: 'Guida in autostrada',
@@ -214,6 +220,7 @@ const COPY = {
     swapHistory: 'Storico swap',
     freeMonWed: 'Libera: lun–mer mattina', freeThu: 'Libero: giovedì pomeriggio',
     partlyAvailable: 'Parzialmente disponibile', completedStatus: 'Completato', language: 'Lingua',
+    profile: 'Profilo',
   },
 };
 
@@ -235,15 +242,16 @@ export default function App() {
 
   return (
     <Layout page={page} navigate={navigate} lang={lang} setLang={setLang} showToast={showToast} toast={toast} t={t}>
-      {page === 'students'          && <StudentsPage     {...pageProps} />}
-      {page === 'log'               && <LessonLogPage    {...pageProps} />}
-      {page === 'settings'          && <SettingsPage     {...pageProps} />}
-      {page === 'users'             && <UsersPage        {...pageProps} />}
-      {page === 'availabilityAdmin' && <AvailabilityPage {...pageProps} />}
-      {page === 'schedule'          && <SchedulePage     {...pageProps} />}
-      {page === 'manoeuvres'        && <ManoeuvresPage   {...pageProps} />}
-      {page === 'swap'              && <SwapPage         {...pageProps} />}
-      {!['students','log','settings','users','availabilityAdmin','schedule','manoeuvres','swap'].includes(page) && (
+      {page === 'students'     && <StudentsPage     {...pageProps} />}
+      {page === 'log'          && <LessonLogPage    {...pageProps} />}
+      {page === 'settings'     && <SettingsPage     {...pageProps} />}
+      {page === 'users'        && <UsersPage        {...pageProps} />}
+      {page === 'availability' && <AvailabilityPage {...pageProps} />}
+      {page === 'schedule'     && <SchedulePage     {...pageProps} />}
+      {page === 'manoeuvres'   && <ManoeuvresPage   {...pageProps} />}
+      {page === 'swap'         && <SwapPage         {...pageProps} />}
+      {page === 'profile'      && <ProfilePage      {...pageProps} />}
+      {!['students','log','settings','users','availability','schedule','manoeuvres','swap','profile'].includes(page) && (
         <DashboardPage {...pageProps} />
       )}
     </Layout>

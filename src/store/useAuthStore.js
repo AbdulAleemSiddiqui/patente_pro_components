@@ -1,18 +1,19 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
-import { getUserRole, getTenantId, signInWithPassword, signOut as signOutFromSupabase } from '../lib/auth.js';
+import { getUserRole, getTenantId, signInWithPassword, signOut as signOutFromSupabase, updateUserMetadata } from '../lib/auth.js';
 
 const useAuthStore = create((set) => ({
   error: null,
   session: null,
   role: null,       // 'admin' | 'teacher' | 'student' | null
   tenantId: null,
+  full_name: null,  // User's full name from public.users
   loading: true,
 
   init: async () => {
     if (!isSupabaseConfigured) {
       // Dev mode — mock an admin session so all screens are accessible
-      set({ session: null, role: 'admin', tenantId: null, loading: false, error: null });
+      set({ session: null, role: 'admin', tenantId: null, full_name: 'Demo Admin', loading: false, error: null });
       return;
     }
 
@@ -22,10 +23,61 @@ const useAuthStore = create((set) => ({
       return;
     }
 
+    let tenantId = getTenantId(session);
+    const role = getUserRole(session);
+    let full_name = session?.user?.user_metadata?.full_name;
+
+    // If tenant_id is missing from metadata, fetch it from public.users
+    if (!tenantId && session?.user?.id) {
+      try {
+        const client = supabase;
+        const { data: userData, error: userError } = await client
+          .from('users')
+          .select('tenant_id, role')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!userError && userData) {
+          tenantId = userData.tenant_id;
+
+          // Update user metadata with tenant_id for future logins
+          await updateUserMetadata({
+            tenantId,
+            role: role || userData.role,
+          });
+
+          // Refresh session to get updated metadata
+          const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+
+          set({
+            session: refreshedSession,
+            role,
+            tenantId,
+            full_name: refreshedSession?.user?.user_metadata?.full_name,
+            loading: false,
+            error: null,
+          });
+
+          supabase.auth.onAuthStateChange((_event, newSession) => {
+            set({
+              session: newSession,
+              role: getUserRole(newSession),
+              tenantId: getTenantId(newSession),
+            });
+          });
+
+          return;
+        }
+      } catch (fetchError) {
+        console.error('Failed to fetch tenant_id from database:', fetchError);
+      }
+    }
+
     set({
       session,
-      role: getUserRole(session),
-      tenantId: getTenantId(session),
+      role,
+      tenantId,
+      full_name,
       loading: false,
       error: null,
     });
@@ -35,6 +87,7 @@ const useAuthStore = create((set) => ({
         session,
         role: getUserRole(session),
         tenantId: getTenantId(session),
+        full_name: session?.user?.user_metadata?.full_name,
       });
     });
   },
@@ -43,16 +96,49 @@ const useAuthStore = create((set) => ({
     set({ loading: true, error: null });
 
     if (!isSupabaseConfigured) {
-      set({ session: null, role: 'admin', tenantId: null, loading: false, error: null });
+      set({ session: null, role: 'admin', tenantId: null, full_name: 'Demo Admin', loading: false, error: null });
       return;
     }
 
     try {
       const { data } = await signInWithPassword({ email, password });
+      let tenantId = getTenantId(data.session);
+      const role = getUserRole(data.session);
+      const full_name = data.session?.user?.user_metadata?.full_name;
+
+      // If tenant_id is missing from metadata, fetch it from public.users
+      if (!tenantId && data.session?.user?.id) {
+        try {
+          const client = supabase;
+          const { data: userData, error: userError } = await client
+            .from('users')
+            .select('tenant_id, role')
+            .eq('id', data.session.user.id)
+            .single();
+
+          if (!userError && userData) {
+            tenantId = userData.tenant_id;
+
+            // Update user metadata with tenant_id for future logins
+            await updateUserMetadata({
+              tenantId,
+              role: role || userData.role,
+            });
+
+            // Refresh session to get updated metadata
+            const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+            data.session = refreshedSession;
+          }
+        } catch (fetchError) {
+          console.error('Failed to fetch tenant_id from database:', fetchError);
+        }
+      }
+
       set({
         session: data.session,
-        role: getUserRole(data.session),
-        tenantId: getTenantId(data.session),
+        role,
+        tenantId,
+        full_name,
         loading: false,
         error: null,
       });
@@ -71,16 +157,17 @@ const useAuthStore = create((set) => ({
         console.error('Supabase sign out failed', error);
       }
     }
-    set({ session: null, role: null, tenantId: null, loading: false, error: null });
+    set({ session: null, role: null, tenantId: null, full_name: null, loading: false, error: null });
   },
 
   setSession: (session) => set({
     session,
     role: getUserRole(session),
     tenantId: getTenantId(session),
+    full_name: session?.user?.user_metadata?.full_name,
   }),
 
-  clearSession: () => set({ session: null, role: null, tenantId: null, error: null }),
+  clearSession: () => set({ session: null, role: null, tenantId: null, full_name: null, error: null }),
 }));
 
 export default useAuthStore;

@@ -15,6 +15,38 @@ export async function listUsers({ tenantId, role } = {}) {
   return data;
 }
 
+export async function updateUser({ userId, fullName, phone }) {
+  const client = requireSupabase();
+
+  // Update public.users table
+  const { data, error } = await client
+    .from('users')
+    .update({
+      full_name: fullName,
+      phone: phone || null,
+    })
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Also update auth metadata so the change reflects immediately
+  const { error: authError } = await client.auth.updateUser({
+    data: {
+      full_name: fullName,
+      phone: phone || null,
+    },
+  });
+
+  if (authError) {
+    console.warn('Failed to update auth metadata:', authError);
+    // Don't throw - the main update succeeded
+  }
+
+  return data;
+}
+
 export async function listLessons({ tenantId, teacherId, studentId } = {}) {
   const client = requireSupabase();
   let query = client
@@ -39,6 +71,69 @@ export async function listTeacherAvailability({ teacherId } = {}) {
   const { data, error } = await query;
   if (error) throw error;
   return data;
+}
+
+/**
+ * Set weekly availability for a teacher
+ * Replaces all existing availability with the new set
+ */
+export async function setTeacherWeeklyAvailability({ teacherId, availability }) {
+  const client = requireSupabase();
+
+  // First, delete existing availability for this teacher
+  const { error: deleteError } = await client
+    .from('teacher_availability')
+    .delete()
+    .eq('teacher_id', teacherId);
+
+  if (deleteError) throw deleteError;
+
+  // Insert new availability slots
+  if (availability && availability.length > 0) {
+    const { error: insertError } = await client
+      .from('teacher_availability')
+      .insert(
+        availability.map(slot => ({
+          teacher_id: teacherId,
+          day_of_week: slot.dayOfWeek,
+          start_time: slot.startTime,
+          end_time: slot.endTime,
+        }))
+      );
+
+    if (insertError) throw insertError;
+  }
+
+  return { success: true };
+}
+
+/**
+ * Get availability grouped by day for a teacher
+ */
+export async function getTeacherWeeklyAvailability({ teacherId }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('teacher_availability')
+    .select('*')
+    .eq('teacher_id', teacherId)
+    .order('day_of_week')
+    .order('start_time');
+
+  if (error) throw error;
+
+  // Group by day of week
+  const grouped = (data || []).reduce((acc, slot) => {
+    if (!acc[slot.day_of_week]) {
+      acc[slot.day_of_week] = [];
+    }
+    acc[slot.day_of_week].push({
+      startTime: slot.start_time,
+      endTime: slot.end_time,
+    });
+    return acc;
+  }, {});
+
+  return grouped;
 }
 
 export async function getTenant({ tenantId } = {}) {

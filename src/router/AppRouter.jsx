@@ -43,7 +43,7 @@ function Root() {
       <Route
         path="/*"
         element={
-          <RequireAuth allowedRoles={['admin', 'teacher']}>
+          <RequireAuth allowedRoles={['admin', 'teacher', 'student']}>
             <App />
           </RequireAuth>
         }

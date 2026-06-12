@@ -2,30 +2,32 @@ import { useMemo } from 'react';
 import {
   Bell, Car, CalendarDays, ClipboardList, Clock,
   LayoutDashboard, Plus, Route, Search, Settings,
-  Shuffle, UserPlus, Users,
+  Shuffle, UserPlus, Users, LogOut, User,
 } from 'lucide-react';
 import { isSupabaseConfigured } from '../lib/supabase.js';
 import { Badge, Button, IconButton, Toast } from './ui.jsx';
-
-const NAV_ITEMS = [
-  { section: 'main',  page: 'dashboard',        icon: LayoutDashboard },
-  { section: 'main',  page: 'students',          icon: Users },
-  { section: 'main',  page: 'log',               icon: ClipboardList },
-  { section: 'admin', page: 'settings',          icon: Settings },
-  { section: 'admin', page: 'users',             icon: UserPlus },
-  { section: 'admin', page: 'availabilityAdmin', icon: Clock },
-  { section: 'admin', page: 'schedule',          icon: CalendarDays },
-  { section: 'tools', page: 'manoeuvres',        icon: Route },
-  { section: 'tools', page: 'swap',              icon: Shuffle },
-];
+import useAuthStore from '../store/useAuthStore.js';
+import { NAV_ITEMS, getNavItemsForRole } from '../lib/roleAccess.js';
 
 export default function Layout({ page, navigate, lang, setLang, showToast, toast, t, children }) {
+  const { session, role, full_name, logout } = useAuthStore();
+
   return (
     <div className="min-h-screen bg-white p-0 sm:p-5 text-ink">
       <div className="flex h-screen min-h-[620px] overflow-hidden border border-line bg-shell sm:h-[calc(100vh-40px)] sm:rounded-[10px]">
-        <Sidebar page={page} navigate={navigate} t={t} />
+        <Sidebar page={page} navigate={navigate} t={t} role={role} full_name={full_name} />
         <main className="flex-1 overflow-y-auto">
-          <TopHeader lang={lang} setLang={setLang} navigate={navigate} showToast={showToast} t={t} />
+          <TopHeader
+            lang={lang}
+            setLang={setLang}
+            navigate={navigate}
+            showToast={showToast}
+            t={t}
+            session={session}
+            role={role}
+            full_name={full_name}
+            logout={logout}
+          />
           {children}
         </main>
       </div>
@@ -34,15 +36,35 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
   );
 }
 
-function Sidebar({ page, navigate, t }) {
-  const sections = useMemo(
-    () =>
-      NAV_ITEMS.reduce(
-        (acc, item) => ({ ...acc, [item.section]: [...(acc[item.section] || []), item] }),
-        {},
-      ),
-    [],
-  );
+function Sidebar({ page, navigate, t, role, full_name }) {
+  const sections = useMemo(() => {
+    const allowedItems = getNavItemsForRole(role);
+
+    return allowedItems.reduce((acc, item) => {
+      if (!acc[item.section]) {
+        acc[item.section] = [];
+      }
+      acc[item.section].push(item);
+      return acc;
+    }, {});
+  }, [role]);
+
+  // Get initials from full name
+  const initials = full_name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U';
+
+  // Icon mapping
+  const iconMap = {
+    LayoutDashboard,
+    CalendarDays,
+    Clock,
+    Users,
+    UserPlus,
+    ClipboardList,
+    Settings,
+    Route,
+    Shuffle,
+    User,
+  };
 
   return (
     <aside className="hidden w-[200px] shrink-0 flex-col bg-brand text-white md:flex">
@@ -57,40 +79,49 @@ function Sidebar({ page, navigate, t }) {
       {Object.entries(sections).map(([section, items]) => (
         <div key={section}>
           <div className="pb-1 pl-3 pt-2.5 text-[10px] uppercase tracking-[0.8px] text-white/35">
-            {t[section]}
+            {t[section] || section}
           </div>
-          {items.map(({ page: itemPage, icon: Icon }) => (
-            <button
-              key={itemPage}
-              className={`flex w-full items-center gap-2.5 border-l-2 px-4 py-2.5 text-left text-[13px] transition ${
-                page === itemPage
-                  ? 'border-[#6eb5f5] bg-white/10 text-white'
-                  : 'border-transparent text-white/65 hover:bg-white/10 hover:text-white'
-              }`}
-              onClick={() => navigate(itemPage)}
-            >
-              <Icon size={16} />
-              {t[itemPage]}
-            </button>
-          ))}
+          {items.map((item) => {
+            const Icon = iconMap[item.icon];
+            return (
+              <button
+                key={item.page}
+                className={`flex w-full items-center gap-2.5 border-l-2 px-4 py-2.5 text-left text-[13px] transition ${
+                  page === item.page
+                    ? 'border-[#6eb5f5] bg-white/10 text-white'
+                    : 'border-transparent text-white/65 hover:bg-white/10 hover:text-white'
+                }`}
+                onClick={() => navigate(item.page)}
+              >
+                {Icon && <Icon size={16} />}
+                {t[item.page] || item.label}
+              </button>
+            );
+          })}
         </div>
       ))}
 
       <div className="flex-1" />
-      <div className="m-3 flex items-center gap-2.5 rounded-md bg-white/10 px-3 py-2.5">
+      <button
+        onClick={() => navigate('profile')}
+        className="m-3 flex w-full items-center gap-2.5 rounded-md bg-white/10 px-3 py-2.5 transition hover:bg-white/20"
+      >
         <div className="grid size-8 place-items-center rounded-full bg-[#6eb5f5] text-xs font-medium text-brand">
-          MR
+          {initials}
         </div>
-        <div>
-          <div className="text-xs font-medium text-white">Marco Rossi</div>
-          <div className="text-[11px] text-white/45">{t.instructor}</div>
+        <div className="flex-1 min-w-0 text-left">
+          <div className="truncate text-xs font-medium text-white">{full_name || 'User'}</div>
+          <div className="text-[11px] text-white/45 capitalize">{role || 'Guest'}</div>
         </div>
-      </div>
+      </button>
     </aside>
   );
 }
 
-function TopHeader({ lang, setLang, navigate, showToast, t }) {
+function TopHeader({ lang, setLang, navigate, showToast, t, session, role, full_name, logout }) {
+  // Only show "New Lesson" button for admin and teacher roles
+  const canCreateLesson = role === 'admin' || role === 'teacher';
+
   return (
     <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-5 py-2.5">
       <div className="relative">
@@ -111,10 +142,18 @@ function TopHeader({ lang, setLang, navigate, showToast, t }) {
         <IconButton label="Notifications" onClick={() => showToast(t.notificationsNone)}>
           <Bell size={16} />
         </IconButton>
-        <Button primary onClick={() => navigate('log')}>
-          <Plus size={16} />
-          {t.newLesson}
-        </Button>
+        {canCreateLesson && (
+          <Button primary onClick={() => navigate('log')}>
+            <Plus size={16} />
+            {t.newLesson}
+          </Button>
+        )}
+        {session && (
+          <Button onClick={logout}>
+            <LogOut size={16} />
+            Logout
+          </Button>
+        )}
       </div>
     </header>
   );
