@@ -6,15 +6,15 @@ import LessonLogPage    from './pages/LessonLogPage.jsx';
 import SettingsPage     from './pages/SettingsPage.jsx';
 import UsersPage        from './pages/UsersPage.jsx';
 import SchedulePage     from './pages/SchedulePage.jsx';
-import ManoeuvresPage   from './pages/ManoeuvresPage.jsx';
 import SwapPage         from './pages/SwapPage.jsx';
 import ProfilePage      from './pages/ProfilePage.jsx';
+import StudentProgressPage from './pages/StudentProgressPage.jsx';
 
 const COPY = {
   en: {
     appTitle: 'PatentePro', appSubtitle: 'Instructor management', instructor: 'Instructor',
-    main: 'Main', admin: 'Admin', tools: 'Tools',
-    dashboard: 'Dashboard', students: 'Students', log: 'Log lesson',
+    main: 'Main', admin: 'Admin', tools: 'Tools', instructor: 'Students', student: 'Student',
+    dashboard: 'Dashboard', students: 'Progress', log: 'Log lesson',
     settings: 'Settings', users: 'Users', availabilityAdmin: 'Availability',
     schedule: 'Schedule', manoeuvres: 'Manoeuvres', swap: 'Slot swap',
     search: 'Search student...', newLesson: 'New lesson',
@@ -116,10 +116,21 @@ const COPY = {
     freeMonWed: 'Free: Mon–Wed morning', freeThu: 'Free: Thursday afternoon',
     partlyAvailable: 'Partially available', completedStatus: 'Completed', language: 'Language',
     profile: 'Profile',
+    progress: 'My Progress',
+    progressTitle: 'My Learning Progress',
+    progressSub: 'Track your driving lessons and feedback',
+    lessonsCompleted: 'Lessons completed',
+    generalAverage: 'General average',
+    recentFeedback: 'Recent feedback',
+    viewAllLessons: 'View all lessons',
+    noLessonsYet: 'No lessons completed yet',
+    excellent: 'Excellent',
+    good: 'Good',
+    needsImprovement: 'Needs improvement',
   },
   it: {
     appTitle: 'PatentePro', appSubtitle: 'Gestione istruttori', instructor: 'Istruttore',
-    main: 'Principale', admin: 'Admin', tools: 'Strumenti',
+    main: 'Principale', admin: 'Admin', tools: 'Strumenti', instructor: 'Istruttore', student: 'Studente',
     dashboard: 'Dashboard', students: 'Studenti', log: 'Registra lezione',
     settings: 'Impostazioni', users: 'Utenti', availabilityAdmin: 'Disponibilità',
     schedule: 'Calendario', manoeuvres: 'Manovre', swap: 'Scambio slot',
@@ -220,6 +231,17 @@ const COPY = {
     freeMonWed: 'Libera: lun–mer mattina', freeThu: 'Libero: giovedì pomeriggio',
     partlyAvailable: 'Parzialmente disponibile', completedStatus: 'Completato', language: 'Lingua',
     profile: 'Profilo',
+    progress: 'I miei Progressi',
+    progressTitle: 'I miei progressi',
+    progressSub: 'Monitora le tue lezioni e i feedback',
+    lessonsCompleted: 'Lezioni completate',
+    generalAverage: 'Media generale',
+    recentFeedback: 'Feedback recenti',
+    viewAllLessons: 'Vedi tutte le lezioni',
+    noLessonsYet: 'Nessuna lezione completata',
+    excellent: 'Eccellente',
+    good: 'Buono',
+    needsImprovement: 'Da migliorare',
   },
 };
 
@@ -241,15 +263,16 @@ export default function App() {
 
   return (
     <Layout page={page} navigate={navigate} lang={lang} setLang={setLang} showToast={showToast} toast={toast} t={t}>
-      {page === 'students'     && <StudentsPage     {...pageProps} />}
-      {page === 'log'          && <LessonLogPage    {...pageProps} />}
-      {page === 'settings'     && <SettingsPage     {...pageProps} />}
-      {page === 'users'        && <UsersPage        {...pageProps} />}
-      {page === 'schedule'     && <SchedulePage     {...pageProps} />}
-      {page === 'manoeuvres'   && <ManoeuvresPage   {...pageProps} />}
-      {page === 'swap'         && <SwapPage         {...pageProps} />}
-      {page === 'profile'      && <ProfilePage      {...pageProps} />}
-      {!['students','log','settings','users','schedule','manoeuvres','swap','profile'].includes(page) && (
+      {page === 'students'          && <StudentsPage     {...pageProps} />}
+      {page === 'log'                && <LessonLogPage    {...pageProps} />}
+      {page === 'settings'           && <SettingsPage     {...pageProps} />}
+      {page === 'users'              && <UsersPage        {...pageProps} />}
+      {page === 'schedule'           && <SchedulePage     {...pageProps} />}
+      {page === 'swap'               && <SwapPage         {...pageProps} />}
+      {page === 'profile'            && <ProfilePage      {...pageProps} />}
+      {page === 'progress'           && <StudentProgressPage {...pageProps} />}
+      {page === 'student_progress'    && <StudentProgressPage {...pageProps} />}
+      {!['students','log','settings','users','schedule','swap','profile','progress','student_progress'].includes(page) && (
         <DashboardPage {...pageProps} />
       )}
     </Layout>

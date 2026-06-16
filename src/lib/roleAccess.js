@@ -7,17 +7,17 @@
 export const NAV_ITEMS = [
   // Main section - core functionality
   { section: 'main',  page: 'dashboard',        icon: 'LayoutDashboard', label: 'Dashboard' },
-  { section: 'main',  page: 'schedule',         icon: 'CalendarDays',      label: 'Schedule' },
+  { section: 'main',  page: 'schedule',         icon: 'CalendarDays',      label: 'Calendar' },
 
   // Admin section - only admins see these
-  { section: 'admin', page: 'students',         icon: 'Users',              label: 'Students' },
   { section: 'admin', page: 'users',            icon: 'UserPlus',           label: 'Users' },
-  { section: 'admin', page: 'log',              icon: 'ClipboardList',      label: 'Lesson Log' },
-  { section: 'admin', page: 'settings',         icon: 'Settings',           label: 'Settings' },
 
-  // Tools section - available to all roles
-  { section: 'tools', page: 'manoeuvres',       icon: 'Route',              label: 'Maneuvers' },
-  { section: 'tools', page: 'swap',             icon: 'Shuffle',            label: 'Swap' },
+  // Student section - both admins and teachers see this
+  { section: 'student', page: 'students',        icon: 'TrendingUp',         label: 'Progress' },
+
+  // Tools section - available to appropriate roles
+  { section: 'tools', page: 'swap',            icon: 'Shuffle',            label: 'Slot swap' },
+  { section: 'tools', page: 'settings',         icon: 'Settings',           label: 'Settings', comingSoon: true },
 
   // Profile section - all users see this
   { section: 'profile', page: 'profile',        icon: 'User',               label: 'Profile' },
@@ -32,26 +32,24 @@ export const ROLE_ACCESS = {
     'schedule',
     'students',
     'users',
-    'log',
-    'settings',
-    'manoeuvres',
     'swap',
+    'settings',
     'profile',
   ],
 
   teacher: [
     'dashboard',
-    'schedule',       // Their lesson schedule
-    'students',       // List of students (read-only)
-    'manoeuvres',     // View maneuvers
-    'swap',           // Request swaps
+    'schedule',
+    'students',       // Same students page as admin (with student data)
+    'log',            // Accessed via calendar, not shown in menu
+    'swap',
     'profile',
   ],
 
   student: [
     'dashboard',
-    'schedule',       // Their lesson schedule
-    'manoeuvres',     // View their progress
+    'schedule',
+    'student_progress', // Student's own progress
     'profile',
   ],
 };

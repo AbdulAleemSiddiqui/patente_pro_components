@@ -142,6 +142,39 @@ export async function listErrorTags({ tenantId } = {}) {
   return data;
 }
 
+export async function listRouteTypes({ tenantId } = {}) {
+  const client = requireSupabase();
+  const user = requireSupabase().auth.getUser();
+
+  // Get tenant_id from auth user metadata
+  const { data: userData } = await client
+    .from('users')
+    .select('tenant_id')
+    .eq('id', (await user).data.user.id)
+    .single();
+
+  const currentTenantId = userData?.tenant_id;
+
+  // First get the city for this tenant
+  const { data: tenantData } = await client
+    .from('tenants')
+    .select('city_id')
+    .eq('id', currentTenantId)
+    .single();
+
+  if (!tenantData) return [];
+
+  // Then get route types for that city
+  const { data, error } = await client
+    .from('route_types')
+    .select('*, route_sub_types(*)')
+    .eq('city_id', tenantData.city_id)
+    .order('name');
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function listRoutesForCity(cityId) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -189,14 +222,55 @@ export async function deleteLesson({ id }) {
 
 export async function submitLessonFeedback({ feedback, maneuverRatings, errorTagIds }) {
   const client = requireSupabase();
-  const { data: savedFeedback, error: feedbackError } = await client
+
+  // First check if feedback already exists for this lesson
+  const { data: existingFeedback, error: checkError } = await client
     .from('lesson_feedback')
-    .insert(feedback)
-    .select()
-    .single();
+    .select('id')
+    .eq('lesson_id', feedback.lesson_id)
+    .maybeSingle();
 
-  if (feedbackError) throw feedbackError;
+  if (checkError) throw checkError;
 
+  let savedFeedback;
+
+  if (existingFeedback) {
+    // Update existing feedback
+    const { data, error: updateError } = await client
+      .from('lesson_feedback')
+      .update({
+        route_type_id: feedback.route_type_id,
+        route_sub_type_id: feedback.route_sub_type_id,
+        notes: feedback.notes,
+        general_rating: feedback.general_rating,
+      })
+      .eq('id', existingFeedback.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+    savedFeedback = data;
+
+    // Delete existing maneuver ratings for this feedback
+    const { error: deleteError } = await client
+      .from('maneuver_ratings')
+      .delete()
+      .eq('lesson_feedback_id', existingFeedback.id);
+
+    if (deleteError) throw deleteError;
+  } else {
+    // Insert new feedback
+    const { data, error: feedbackError } = await client
+      .from('lesson_feedback')
+      .insert(feedback)
+      .select()
+      .single();
+
+    if (feedbackError) throw feedbackError;
+    savedFeedback = data;
+  }
+
+  // Insert maneuver ratings
   if (maneuverRatings?.length) {
     const { error } = await client.from('maneuver_ratings').insert(
       maneuverRatings.map((rating) => ({

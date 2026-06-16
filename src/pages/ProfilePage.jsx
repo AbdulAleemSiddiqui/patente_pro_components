@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { User, Mail, Phone, Building, Lock, LogOut } from 'lucide-react';
+import { User, Mail, Phone, Building, Lock, Clock } from 'lucide-react';
 import { Badge, Button, Card, Page, PageHeader, Field } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
 import { updateUser } from '../lib/api.js';
 
 export default function ProfilePage({ showToast, t, lang }) {
-  const { session, role, full_name, logout, setSession } = useAuthStore();
+  const { session, role, full_name, setSession } = useAuthStore();
   const [editing, setEditing] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -112,7 +112,7 @@ export default function ProfilePage({ showToast, t, lang }) {
       />
 
       <Card title="Account Information">
-        <div className="space-y-4">
+        <div className="space-y-4 p-4">
           <div className="flex items-center gap-4">
             <div className="grid size-16 shrink-0 place-items-center rounded-full bg-brand-light text-2xl font-medium text-brand">
               {full_name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U'}
@@ -165,7 +165,7 @@ export default function ProfilePage({ showToast, t, lang }) {
               </div>
             </div>
           ) : (
-            <div className="space-y-4 pt-4">
+            <div className="space-y-4 p-4">
               <div className="grid grid-cols-[120px_1fr] gap-2 text-sm">
                 <div className="flex items-center gap-2 text-muted">
                   <User size={16} />
@@ -193,8 +193,8 @@ export default function ProfilePage({ showToast, t, lang }) {
       </Card>
 
       <Card title="Account Settings">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-line pb-4">
+        <div className="space-y-4 p-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Lock size={16} className="text-muted" />
               <div>
@@ -202,21 +202,9 @@ export default function ProfilePage({ showToast, t, lang }) {
                 <div className="text-[13px] text-muted">Send password reset email</div>
               </div>
             </div>
-            <Button small onClick={handlePasswordReset}>
-              Reset
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <LogOut size={16} className="text-muted" />
-              <div>
-                <div className="text-sm font-medium">Logout</div>
-                <div className="text-[13px] text-muted">Sign out of your account</div>
-              </div>
-            </div>
-            <Button small onClick={logout}>
-              Logout
+            <Button small disabled className="opacity-60" title="Coming soon">
+              <Clock size={12} />
+              <span className="ml-1">Coming soon</span>
             </Button>
           </div>
         </div>

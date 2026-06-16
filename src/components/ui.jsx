@@ -15,7 +15,7 @@ export function Badge({ tone = 'blue', children }) {
   );
 }
 
-export function Button({ children, primary, small, success, onClick }) {
+export function Button({ children, primary, small, success, onClick, className = '' }) {
   return (
     <button
       className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-3.5 py-2 text-[13px] transition
@@ -25,7 +25,7 @@ export function Button({ children, primary, small, success, onClick }) {
           : success
             ? 'border-success bg-white text-success hover:bg-success-light'
             : 'border-line bg-white text-ink hover:bg-[#f5f5f5]'
-        }`}
+        } ${className}`}
       onClick={onClick}
     >
       {children}

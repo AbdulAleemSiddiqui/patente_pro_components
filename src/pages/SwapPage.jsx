@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import { Button, Card, Dot, Page, PageHeader, TwoColumnGrid } from '../components/ui.jsx';
+import useAuthStore from '../store/useAuthStore.js';
 
 const INCOMING = [
   {
@@ -24,15 +25,20 @@ const AVAILABLE = [
 ];
 
 export default function SwapPage({ showToast, t }) {
+  const { role } = useAuthStore();
+  const isAdmin = role === 'admin';
+
   return (
     <Page>
       <PageHeader
         title={t.swapTitle}
         subtitle={t.swapSub}
         action={
-          <Button primary onClick={() => showToast(`${t.newSwapSent} ✓`)}>
-            <Plus size={16} />{t.newSwap}
-          </Button>
+          !isAdmin && (
+            <Button primary onClick={() => showToast(`${t.newSwapSent} ✓`)}>
+              <Plus size={16} />{t.newSwap}
+            </Button>
+          )
         }
       />
 
@@ -53,29 +59,33 @@ export default function SwapPage({ showToast, t }) {
                   {t.reason}: {t[req.reasonKey]}
                 </div>
               </div>
-              <div className="flex gap-1.5">
-                <Button small success onClick={() => showToast(`${t.accepted} ✓`)}>{t.accept}</Button>
-                <Button small onClick={() => showToast(t.rejected)}>{t.reject}</Button>
-              </div>
+              {!isAdmin && (
+                <div className="flex gap-1.5">
+                  <Button small success onClick={() => showToast(`${t.accepted} ✓`)}>{t.accept}</Button>
+                  <Button small onClick={() => showToast(t.rejected)}>{t.reject}</Button>
+                </div>
+              )}
             </div>
           ))}
         </Card>
 
-        <Card title={t.availability}>
-          {AVAILABLE.map((inst) => (
-            <div
-              key={inst.name}
-              className="flex items-center gap-2.5 border-b border-line px-4 py-3 text-[13px] last:border-b-0"
-            >
-              <Dot tone={inst.tone} />
-              <div className="flex-1">
-                <div className="font-medium">{inst.name}</div>
-                <div className="text-[11px] text-muted">{t[inst.availKey]}</div>
+        {!isAdmin && (
+          <Card title={t.availability}>
+            {AVAILABLE.map((inst) => (
+              <div
+                key={inst.name}
+                className="flex items-center gap-2.5 border-b border-line px-4 py-3 text-[13px] last:border-b-0"
+              >
+                <Dot tone={inst.tone} />
+                <div className="flex-1">
+                  <div className="font-medium">{inst.name}</div>
+                  <div className="text-[11px] text-muted">{t[inst.availKey]}</div>
+                </div>
+                <Button small onClick={() => showToast(t.contactSent)}>{t.contact}</Button>
               </div>
-              <Button small onClick={() => showToast(t.contactSent)}>{t.contact}</Button>
-            </div>
-          ))}
-        </Card>
+            ))}
+          </Card>
+        )}
       </TwoColumnGrid>
 
       <Card title={t.swapHistory}>

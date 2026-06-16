@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, UserPlus, X } from 'lucide-react';
+import { Plus, UserPlus, X, Clock } from 'lucide-react';
 import { Badge, Button, Card, Page, PageHeader, Field } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
 import { listUsers, updateUser } from '../lib/api.js';
@@ -207,7 +207,6 @@ export default function UsersPage({ showToast, t, lang }) {
                 </div>
                 <div>
                   <div className="font-medium">{teacher.full_name}</div>
-                  <div className="text-[11px] text-muted">0 {t.lessonsToday.toLowerCase()}</div>
                 </div>
               </div>
               <div className="text-muted">{teacher.email}</div>
@@ -215,7 +214,9 @@ export default function UsersPage({ showToast, t, lang }) {
               <Badge tone={teacher.is_active ? 'green' : 'warn'}>{teacher.is_active ? t.active : 'inactive'}</Badge>
               <div className="flex gap-1.5">
                 <Button small onClick={() => handleOpenEditModal(teacher)}>{t.edit}</Button>
-                <Button small>{t.deactivate}</Button>
+                <Button small disabled className="opacity-60">
+                  <Clock size={12} />
+                </Button>
               </div>
             </div>
           );
@@ -230,9 +231,6 @@ export default function UsersPage({ showToast, t, lang }) {
           >
             <div>
               <div className="font-medium">{student.full_name}</div>
-              <div className="text-[11px] text-muted">
-                0 {t.lessons} {t.last}: recent
-              </div>
             </div>
             <div className="flex items-center gap-2">
               <Badge tone="blue">{t.inProgress}</Badge>
