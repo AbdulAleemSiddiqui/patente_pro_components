@@ -61,6 +61,11 @@ export default function SettingsPage({ showToast, t }) {
           </Button>
         }
       />
+
+      <div className="mb-4 rounded-md bg-[#6eb5f5] px-4 py-2.5 text-center">
+        <span className="text-sm font-medium text-white">Coming soon - This feature is under development</span>
+      </div>
+
       <TwoColumnGrid>
         <Card title={t.schoolProfile}>
           <div className="grid gap-3 p-4">

@@ -63,10 +63,17 @@ export async function listLessons({ tenantId, teacherId, studentId } = {}) {
   return data;
 }
 
-export async function listTeacherAvailability({ teacherId } = {}) {
+/**
+ * List teacher availability blocks for a date range
+ */
+export async function listTeacherAvailability({ tenantId, teacherId, from, to } = {}) {
   const client = requireSupabase();
-  let query = client.from('teacher_availability').select('*').order('day_of_week').order('start_time');
+  let query = client.from('teacher_availability').select('*').order('start_at');
+
+  query = byTenant(query, tenantId);
   if (teacherId) query = query.eq('teacher_id', teacherId);
+  if (from) query = query.gte('end_at', from);
+  if (to) query = query.lte('start_at', to);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -74,66 +81,27 @@ export async function listTeacherAvailability({ teacherId } = {}) {
 }
 
 /**
- * Set weekly availability for a teacher
- * Replaces all existing availability with the new set
+ * Create a new teacher availability block
  */
-export async function setTeacherWeeklyAvailability({ teacherId, availability }) {
-  const client = requireSupabase();
-
-  // First, delete existing availability for this teacher
-  const { error: deleteError } = await client
-    .from('teacher_availability')
-    .delete()
-    .eq('teacher_id', teacherId);
-
-  if (deleteError) throw deleteError;
-
-  // Insert new availability slots
-  if (availability && availability.length > 0) {
-    const { error: insertError } = await client
-      .from('teacher_availability')
-      .insert(
-        availability.map(slot => ({
-          teacher_id: teacherId,
-          day_of_week: slot.dayOfWeek,
-          start_time: slot.startTime,
-          end_time: slot.endTime,
-        }))
-      );
-
-    if (insertError) throw insertError;
-  }
-
-  return { success: true };
-}
-
-/**
- * Get availability grouped by day for a teacher
- */
-export async function getTeacherWeeklyAvailability({ teacherId }) {
+export async function createTeacherAvailability({ tenantId, teacherId, startAt, endAt }) {
   const client = requireSupabase();
   const { data, error } = await client
     .from('teacher_availability')
-    .select('*')
-    .eq('teacher_id', teacherId)
-    .order('day_of_week')
-    .order('start_time');
+    .insert({ tenant_id: tenantId, teacher_id: teacherId, start_at: startAt, end_at: endAt })
+    .select()
+    .single();
 
   if (error) throw error;
+  return data;
+}
 
-  // Group by day of week
-  const grouped = (data || []).reduce((acc, slot) => {
-    if (!acc[slot.day_of_week]) {
-      acc[slot.day_of_week] = [];
-    }
-    acc[slot.day_of_week].push({
-      startTime: slot.start_time,
-      endTime: slot.end_time,
-    });
-    return acc;
-  }, {});
-
-  return grouped;
+/**
+ * Delete a teacher availability block
+ */
+export async function deleteTeacherAvailability({ id }) {
+  const client = requireSupabase();
+  const { error } = await client.from('teacher_availability').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export async function getTenant({ tenantId } = {}) {
@@ -174,6 +142,39 @@ export async function listErrorTags({ tenantId } = {}) {
   return data;
 }
 
+export async function listRouteTypes({ tenantId } = {}) {
+  const client = requireSupabase();
+  const user = requireSupabase().auth.getUser();
+
+  // Get tenant_id from auth user metadata
+  const { data: userData } = await client
+    .from('users')
+    .select('tenant_id')
+    .eq('id', (await user).data.user.id)
+    .single();
+
+  const currentTenantId = userData?.tenant_id;
+
+  // First get the city for this tenant
+  const { data: tenantData } = await client
+    .from('tenants')
+    .select('city_id')
+    .eq('id', currentTenantId)
+    .single();
+
+  if (!tenantData) return [];
+
+  // Then get route types for that city
+  const { data, error } = await client
+    .from('route_types')
+    .select('*, route_sub_types(*)')
+    .eq('city_id', tenantData.city_id)
+    .order('name');
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function listRoutesForCity(cityId) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -193,16 +194,83 @@ export async function createLesson(payload) {
   return data;
 }
 
-export async function submitLessonFeedback({ feedback, maneuverRatings, errorTagIds }) {
+export async function updateLesson({ id, scheduled_at, duration_minutes, teacher_id, student_id, status }) {
   const client = requireSupabase();
-  const { data: savedFeedback, error: feedbackError } = await client
-    .from('lesson_feedback')
-    .insert(feedback)
+  const updateData = {};
+  if (scheduled_at !== undefined) updateData.scheduled_at = scheduled_at;
+  if (duration_minutes !== undefined) updateData.duration_minutes = duration_minutes;
+  if (teacher_id !== undefined) updateData.teacher_id = teacher_id;
+  if (student_id !== undefined) updateData.student_id = student_id;
+  if (status !== undefined) updateData.status = status;
+
+  const { data, error } = await client
+    .from('lessons')
+    .update(updateData)
+    .eq('id', id)
     .select()
     .single();
 
-  if (feedbackError) throw feedbackError;
+  if (error) throw error;
+  return data;
+}
 
+export async function deleteLesson({ id }) {
+  const client = requireSupabase();
+  const { error } = await client.from('lessons').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function submitLessonFeedback({ feedback, maneuverRatings, errorTagIds }) {
+  const client = requireSupabase();
+
+  // First check if feedback already exists for this lesson
+  const { data: existingFeedback, error: checkError } = await client
+    .from('lesson_feedback')
+    .select('id')
+    .eq('lesson_id', feedback.lesson_id)
+    .maybeSingle();
+
+  if (checkError) throw checkError;
+
+  let savedFeedback;
+
+  if (existingFeedback) {
+    // Update existing feedback
+    const { data, error: updateError } = await client
+      .from('lesson_feedback')
+      .update({
+        route_type_id: feedback.route_type_id,
+        route_sub_type_id: feedback.route_sub_type_id,
+        notes: feedback.notes,
+        general_rating: feedback.general_rating,
+      })
+      .eq('id', existingFeedback.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+    savedFeedback = data;
+
+    // Delete existing maneuver ratings for this feedback
+    const { error: deleteError } = await client
+      .from('maneuver_ratings')
+      .delete()
+      .eq('lesson_feedback_id', existingFeedback.id);
+
+    if (deleteError) throw deleteError;
+  } else {
+    // Insert new feedback
+    const { data, error: feedbackError } = await client
+      .from('lesson_feedback')
+      .insert(feedback)
+      .select()
+      .single();
+
+    if (feedbackError) throw feedbackError;
+    savedFeedback = data;
+  }
+
+  // Insert maneuver ratings
   if (maneuverRatings?.length) {
     const { error } = await client.from('maneuver_ratings').insert(
       maneuverRatings.map((rating) => ({

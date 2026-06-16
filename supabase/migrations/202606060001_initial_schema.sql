@@ -45,13 +45,21 @@ create table public.route_sub_types (
   unique (route_type_id, label)
 );
 
+-- create table public.teacher_availability (
+--   id uuid primary key default gen_random_uuid(),
+--   teacher_id uuid not null references public.users(id) on delete cascade,
+--   day_of_week int not null check (day_of_week between 0 and 6),
+--   start_time time not null,
+--   end_time time not null,
+--   check (start_time < end_time)
+-- );
 create table public.teacher_availability (
   id uuid primary key default gen_random_uuid(),
   teacher_id uuid not null references public.users(id) on delete cascade,
-  day_of_week int not null check (day_of_week between 0 and 6),
-  start_time time not null,
-  end_time time not null,
-  check (start_time < end_time)
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  start_at timestamptz not null,
+  end_at timestamptz not null,
+  check (start_at < end_at)
 );
 
 create table public.maneuvers (
@@ -116,7 +124,9 @@ create index users_tenant_role_idx on public.users (tenant_id, role);
 create index lessons_tenant_scheduled_idx on public.lessons (tenant_id, scheduled_at);
 create index lessons_teacher_idx on public.lessons (teacher_id, scheduled_at);
 create index lessons_student_idx on public.lessons (student_id, scheduled_at);
-create index teacher_availability_teacher_idx on public.teacher_availability (teacher_id, day_of_week);
+-- create index teacher_availability_teacher_idx on public.teacher_availability (teacher_id, day_of_week);
+create index teacher_availability_teacher_idx on public.teacher_availability (teacher_id, start_at);
+create index teacher_availability_tenant_idx on public.teacher_availability (tenant_id, start_at);
 create index swap_requests_target_idx on public.swap_requests (target_teacher_id, status);
 
 create or replace function public.jwt_tenant_id()

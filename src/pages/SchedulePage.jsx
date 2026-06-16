@@ -2,10 +2,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { Calendar, dateFnsLocalizer, Views, momentLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS, it } from 'date-fns/locale';
-import { Plus, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, X, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, Page, PageHeader, Field } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
-import { listUsers, listLessons, createLesson } from '../lib/api.js';
+import { listUsers, listLessons, createLesson, updateLesson, deleteLesson, listTeacherAvailability, createTeacherAvailability, deleteTeacherAvailability } from '../lib/api.js';
 
 // Setup date-fns localizer for react-big-calendar
 const localizer = dateFnsLocalizer({
@@ -19,24 +19,36 @@ const localizer = dateFnsLocalizer({
   },
 });
 
-export default function SchedulePage({ showToast, t, lang }) {
+export default function SchedulePage({ showToast, t, lang, navigate }) {
   const { tenantId, role, session } = useAuthStore();
   const [view, setView] = useState('month');
   const [date, setDate] = useState(new Date());
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [teacherAvailability, setTeacherAvailability] = useState([]);
   const [selectedTeacher, setSelectedTeacher] = useState('all');
   const [loading, setLoading] = useState(true);
 
   // Modal state
+  const [showTypeChoiceModal, setShowTypeChoiceModal] = useState(false);
   const [showLessonModal, setShowLessonModal] = useState(false);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [conflictInfo, setConflictInfo] = useState(null);
+  const [lessonForFeedback, setLessonForFeedback] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [slotInfo, setSlotInfo] = useState(null);
   const [lessonData, setLessonData] = useState({
     teacherId: '',
     studentId: '',
     duration_minutes: 60,
+    startAt: '',
+  });
+
+  const [availabilityData, setAvailabilityData] = useState({
+    teacherId: '',
   });
 
   const isAdmin = role === 'admin';
@@ -53,25 +65,34 @@ export default function SchedulePage({ showToast, t, lang }) {
         return;
       }
 
+      // Calculate date range for availability (current month)
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+
       if (isAdmin) {
-        const [teacherData, studentData, lessonData] = await Promise.all([
+        const [teacherData, studentData, lessonData, availabilityData] = await Promise.all([
           listUsers({ tenantId, role: 'teacher' }),
           listUsers({ tenantId, role: 'student' }),
           listLessons({ tenantId }),
+          listTeacherAvailability({ tenantId, from: startOfMonth.toISOString(), to: endOfMonth.toISOString() }),
         ]);
 
         setTeachers(teacherData || []);
         setStudents(studentData || []);
         setLessons(lessonData || []);
+        setTeacherAvailability(availabilityData || []);
       } else if (role === 'teacher') {
-        const [lessonData, studentData] = await Promise.all([
+        const [lessonData, studentData, availabilityData] = await Promise.all([
           listLessons({ tenantId, teacherId: currentUserId }),
           listUsers({ tenantId, role: 'student' }),
+          listTeacherAvailability({ tenantId, teacherId: currentUserId, from: startOfMonth.toISOString(), to: endOfMonth.toISOString() }),
         ]);
 
         setLessons(lessonData || []);
         setStudents(studentData || []);
         setTeachers([{ id: currentUserId, full_name: 'You' }]);
+        setTeacherAvailability(availabilityData || []);
       } else if (role === 'student') {
         const [lessonData, teacherData] = await Promise.all([
           listLessons({ tenantId, studentId: currentUserId }),
@@ -80,6 +101,7 @@ export default function SchedulePage({ showToast, t, lang }) {
 
         setLessons(lessonData || []);
         setTeachers(teacherData || []);
+        setTeacherAvailability([]);
       }
 
       setLoading(false);
@@ -91,7 +113,7 @@ export default function SchedulePage({ showToast, t, lang }) {
   };
 
   // Convert lessons to calendar events
-  const events = lessons.map((lesson) => {
+  const lessonEvents = lessons.map((lesson) => {
     const student = students.find(s => s.id === lesson.student_id);
     const teacher = teachers.find(t => t.id === lesson.teacher_id);
 
@@ -100,11 +122,27 @@ export default function SchedulePage({ showToast, t, lang }) {
       title: `${student?.full_name || 'Student'}`,
       start: new Date(lesson.scheduled_at),
       end: new Date(new Date(lesson.scheduled_at).getTime() + lesson.duration_minutes * 60000),
-      resource: lesson,
+      resource: { ...lesson, type: 'lesson' },
       student,
       teacher,
     };
   });
+
+  // Convert availability to calendar events
+  const availabilityEvents = teacherAvailability.map((avail) => {
+    const teacher = teachers.find(t => t.id === avail.teacher_id);
+
+    return {
+      id: avail.id,
+      title: `${teacher?.full_name || 'Teacher'} Available`,
+      start: new Date(avail.start_at),
+      end: new Date(avail.end_at),
+      resource: { ...avail, type: 'availability' },
+      teacher,
+    };
+  });
+
+  const events = [...lessonEvents, ...availabilityEvents];
 
   // Filter lessons based on selected teacher
   const filteredEvents = isAdmin && selectedTeacher && selectedTeacher !== 'all'
@@ -159,6 +197,15 @@ export default function SchedulePage({ showToast, t, lang }) {
       return;
     }
 
+    // For admins, show type choice modal first
+    if (isAdmin) {
+      setSlotInfo({ start, end });
+      setSelectedEvent(null);
+      setShowTypeChoiceModal(true);
+      return;
+    }
+
+    // For teachers, go directly to lesson modal
     const durationMinutes = Math.round((end - start) / 60000);
     const validDurations = [30, 45, 50, 60, 90, 120];
 
@@ -170,9 +217,8 @@ export default function SchedulePage({ showToast, t, lang }) {
     setSlotInfo({ start, end });
     setSelectedEvent(null);
 
-    const teacherId = role === 'teacher' ? currentUserId : '';
     setLessonData({
-      teacherId: teacherId || '',
+      teacherId: currentUserId,
       studentId: '',
       duration_minutes: durationMinutes,
     });
@@ -182,29 +228,286 @@ export default function SchedulePage({ showToast, t, lang }) {
 
   // Handle clicking on an existing event
   const handleSelectEvent = useCallback((event) => {
+    if (event.resource.type === 'availability') {
+      // For availability events, open modal for viewing/editing
+      setSelectedEvent(event);
+      setSlotInfo({
+        start: event.start,
+        end: event.end,
+      });
+      setAvailabilityData({
+        teacherId: event.resource.teacher_id,
+      });
+      setShowAvailabilityModal(true);
+      return;
+    }
+
+    // For lessons, check if teacher is clicking to give feedback
+    if (role === 'teacher' && event.resource.teacher_id === currentUserId) {
+      // Only allow feedback for completed or scheduled lessons (not cancelled)
+      if (event.resource.status !== 'cancelled') {
+        setLessonForFeedback(event);
+        setShowFeedbackModal(true);
+      } else {
+        showToast('Cannot give feedback for cancelled lessons');
+      }
+      return;
+    }
+
+    // For admins and students, or teachers viewing other's lessons, open edit modal
     setSelectedEvent(event);
     setSlotInfo(null);
+
+    // Format dates for datetime-local input (YYYY-MM-DDTHH:mm)
+    const formatForInput = (date) => {
+      const d = new Date(date);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
 
     setLessonData({
       teacherId: event.resource.teacher_id,
       studentId: event.resource.student_id,
       duration_minutes: event.resource.duration_minutes,
+      startAt: formatForInput(event.start),
+      endAt: formatForInput(event.end),
     });
 
     setShowLessonModal(true);
-  }, []);
+  }, [role, currentUserId]);
 
   // Close modal
   const handleCloseModal = () => {
     setShowLessonModal(false);
+    setShowAvailabilityModal(false);
+    setShowTypeChoiceModal(false);
+    setShowConflictModal(false);
+    setShowFeedbackModal(false);
     setSelectedEvent(null);
     setSlotInfo(null);
     setLessonData({
       teacherId: '',
       studentId: '',
       duration_minutes: 60,
+      startAt: '',
     });
+    setAvailabilityData({
+      teacherId: '',
+    });
+    setConflictInfo(null);
+    setLessonForFeedback(null);
   };
+
+  // Handle type choice (Schedule Lesson vs Add Availability)
+  const handleChooseScheduleLesson = () => {
+    setShowTypeChoiceModal(false);
+
+    const durationMinutes = Math.round((slotInfo.end - slotInfo.start) / 60000);
+    const validDurations = [30, 45, 50, 60, 90, 120];
+
+    if (!validDurations.includes(durationMinutes)) {
+      showToast(`Duration: ${durationMinutes}min is not allowed. Use: 30, 45, 50, 60, 90, or 120 minutes.`);
+      handleCloseModal();
+      return;
+    }
+
+    setLessonData({
+      teacherId: '',
+      studentId: '',
+      duration_minutes: durationMinutes,
+    });
+
+    setShowLessonModal(true);
+  };
+
+  const handleChooseAddAvailability = () => {
+    setShowTypeChoiceModal(false);
+
+    setAvailabilityData({
+      teacherId: '',
+    });
+
+    setShowAvailabilityModal(true);
+  };
+
+  // Handle delete availability
+  const handleDeleteAvailability = async (id) => {
+    // Find the availability being deleted
+    const availability = teacherAvailability.find(a => a.id === id);
+    if (!availability) {
+      showToast('Availability not found');
+      return;
+    }
+
+    // Check for any lessons scheduled during this availability period
+    const availStart = new Date(availability.start_at).getTime();
+    const availEnd = new Date(availability.end_at).getTime();
+
+    const conflictingLessons = lessons.filter(lesson => {
+      if (lesson.teacher_id !== availability.teacher_id || lesson.status === 'cancelled') return false;
+      const lessonStart = new Date(lesson.scheduled_at).getTime();
+      const lessonEnd = lessonStart + lesson.duration_minutes * 60000;
+      // Check for any overlap
+      return (lessonStart < availEnd && lessonEnd > availStart);
+    });
+
+    if (conflictingLessons.length > 0) {
+      const conflictDetails = conflictingLessons.map(l => {
+        const student = students.find(s => s.id === l.student_id);
+        return {
+          lessonId: l.id,
+          studentName: student?.full_name || 'A student',
+          scheduledAt: new Date(l.scheduled_at),
+          duration: l.duration_minutes,
+        };
+      });
+
+      setConflictInfo({
+        count: conflictingLessons.length,
+        lessons: conflictDetails,
+        availabilityId: id,
+      });
+      setShowConflictModal(true);
+      return;
+    }
+
+    // No conflicts, proceed with deletion
+    try {
+      await deleteTeacherAvailability({ id });
+      showToast('Availability deleted');
+      if (showAvailabilityModal) {
+        handleCloseModal();
+      }
+      await loadScheduleData();
+    } catch (error) {
+      console.error('Failed to delete availability:', error);
+      showToast(`Failed to delete: ${error.message}`);
+    }
+  };
+
+  // Handle delete lesson
+  const handleDeleteLesson = async () => {
+    if (!selectedEvent?.id) return;
+
+    if (confirm('Are you sure you want to delete this lesson?')) {
+      try {
+        await deleteLesson({ id: selectedEvent.id });
+        showToast('Lesson deleted');
+        handleCloseModal();
+        await loadScheduleData();
+      } catch (error) {
+        console.error('Failed to delete lesson:', error);
+        showToast(`Failed to delete: ${error.message}`);
+      }
+    }
+  };
+
+  // Handle give feedback - navigate to log page with lesson data
+  const handleGiveFeedback = () => {
+    if (!lessonForFeedback) return;
+
+    // Store lesson data in sessionStorage for the log page to use
+    const lessonData = {
+      lessonId: lessonForFeedback.id,
+      studentId: lessonForFeedback.resource.student_id,
+      studentName: lessonForFeedback.student?.full_name || '',
+      teacherId: lessonForFeedback.resource.teacher_id,
+      teacherName: lessonForFeedback.teacher?.full_name || '',
+      scheduledAt: lessonForFeedback.resource.scheduled_at,
+      duration: lessonForFeedback.resource.duration_minutes,
+    };
+
+    sessionStorage.setItem('feedbackLesson', JSON.stringify(lessonData));
+
+    handleCloseModal();
+    navigate('log');
+  };
+
+  // Handle save availability
+  const handleSaveAvailability = async () => {
+    const teacherId = availabilityData.teacherId?.trim();
+
+    if (!teacherId || teacherId === '') {
+      showToast('Please select a teacher');
+      return;
+    }
+
+    if (!tenantId) {
+      showToast('Authentication error: No tenant found');
+      return;
+    }
+
+    try {
+      // If editing, delete the old availability first
+      if (selectedEvent?.id) {
+        await deleteTeacherAvailability({ id: selectedEvent.id });
+      }
+
+      await createTeacherAvailability({
+        tenantId: tenantId,
+        teacherId: teacherId,
+        startAt: slotInfo.start.toISOString(),
+        endAt: slotInfo.end.toISOString(),
+      });
+
+      showToast(selectedEvent ? 'Availability updated successfully' : 'Availability added successfully');
+      handleCloseModal();
+      await loadScheduleData();
+    } catch (error) {
+      console.error('Failed to save availability:', error);
+      showToast(`Failed to save: ${error.message}`);
+    }
+  };
+
+  // Helper: Filter teachers who are available during the selected slot and have no conflicts
+  const getAvailableTeachersForSlot = useCallback(() => {
+    if (!isAdmin) return teachers;
+
+    // Determine which time range to use
+    let slotStart, slotEnd;
+
+    if (selectedEvent && lessonData.startAt && lessonData.duration_minutes) {
+      // Editing mode - use start time from lessonData + duration
+      slotStart = new Date(lessonData.startAt).getTime();
+      slotEnd = slotStart + lessonData.duration_minutes * 60000;
+    } else if (slotInfo) {
+      // New lesson mode - use slotInfo
+      slotStart = slotInfo.start.getTime();
+      slotEnd = slotInfo.end.getTime();
+    } else {
+      // No time info available, return all teachers
+      return teachers;
+    }
+
+    return teachers.filter(teacher => {
+      // Check if teacher has availability covering this slot
+      const hasAvailability = teacherAvailability.some(avail => {
+        if (avail.teacher_id !== teacher.id) return false;
+        const availStart = new Date(avail.start_at).getTime();
+        const availEnd = new Date(avail.end_at).getTime();
+        return availStart <= slotStart && availEnd >= slotEnd;
+      });
+
+      if (!hasAvailability) return false;
+
+      // Check for conflicts with existing lessons (excluding current lesson if editing)
+      const hasConflict = lessons.some(lesson => {
+        if (lesson.teacher_id !== teacher.id || lesson.status === 'cancelled') return false;
+        // Skip the current lesson when editing
+        if (selectedEvent && lesson.id === selectedEvent.id) return false;
+        const lessonStart = new Date(lesson.scheduled_at).getTime();
+        const lessonEnd = lessonStart + lesson.duration_minutes * 60000;
+        // Check for overlap
+        return (slotStart < lessonEnd && slotEnd > lessonStart);
+      });
+
+      return !hasConflict;
+    });
+  }, [slotInfo, teachers, teacherAvailability, lessons, isAdmin, selectedEvent, lessonData.startAt, lessonData.duration_minutes]);
 
   // Handle create/update lesson
   const handleSaveLesson = async () => {
@@ -218,19 +521,64 @@ export default function SchedulePage({ showToast, t, lang }) {
       return;
     }
 
-    try {
-      const scheduledAt = slotInfo?.start || selectedEvent?.start || new Date();
+    // For editing, validate teacher availability based on start time + duration
+    if (selectedEvent && isAdmin && lessonData.startAt) {
+      const startTime = new Date(lessonData.startAt).getTime();
+      const endTime = startTime + lessonData.duration_minutes * 60000;
 
-      await createLesson({
-        tenant_id: tenantId,
-        teacher_id: lessonData.teacherId,
-        student_id: lessonData.studentId,
-        scheduled_at: scheduledAt.toISOString(),
-        duration_minutes: lessonData.duration_minutes,
-        status: 'scheduled',
+      // Validate teacher availability for the entire lesson duration
+      const hasAvailability = teacherAvailability.some(avail => {
+        if (avail.teacher_id !== lessonData.teacherId) return false;
+        const availStart = new Date(avail.start_at).getTime();
+        const availEnd = new Date(avail.end_at).getTime();
+        // Check if the ENTIRE lesson duration fits within availability
+        return availStart <= startTime && availEnd >= endTime;
       });
 
-      showToast('Lesson scheduled successfully');
+      if (!hasAvailability) {
+        showToast('Selected teacher is not available for the entire lesson duration');
+        return;
+      }
+    }
+
+    try {
+      if (selectedEvent) {
+        // Update existing lesson
+        let scheduledAt;
+
+        if (isAdmin && lessonData.startAt) {
+          // Admin changed the time
+          scheduledAt = new Date(lessonData.startAt).toISOString();
+        } else {
+          // Keep original time
+          scheduledAt = selectedEvent.resource.scheduled_at;
+        }
+
+        await updateLesson({
+          id: selectedEvent.id,
+          scheduled_at: scheduledAt,
+          teacher_id: lessonData.teacherId,
+          student_id: lessonData.studentId,
+          duration_minutes: lessonData.duration_minutes,
+        });
+
+        showToast('Lesson updated successfully');
+      } else {
+        // Create new lesson
+        const scheduledAt = slotInfo?.start || new Date();
+
+        await createLesson({
+          tenant_id: tenantId,
+          teacher_id: lessonData.teacherId,
+          student_id: lessonData.studentId,
+          scheduled_at: scheduledAt.toISOString(),
+          duration_minutes: lessonData.duration_minutes,
+          status: 'scheduled',
+        });
+
+        showToast('Lesson scheduled successfully');
+      }
+
       handleCloseModal();
       await loadScheduleData();
     } catch (error) {
@@ -241,6 +589,7 @@ export default function SchedulePage({ showToast, t, lang }) {
 
   // Custom event component
   const EventComponent = ({ event }) => {
+    const isAvailability = event.resource?.type === 'availability';
     const student = event.student;
     const teacher = event.teacher;
 
@@ -251,25 +600,51 @@ export default function SchedulePage({ showToast, t, lang }) {
       .toUpperCase()
       .substring(0, 2) || 'S';
 
-    const colors = [
-      'bg-blue-500 text-white',
-      'bg-green-500 text-white',
-      'bg-purple-500 text-white',
-      'bg-orange-500 text-white',
-      'bg-pink-500 text-white',
-      'bg-teal-500 text-white',
-      'bg-indigo-500 text-white',
-    ];
-    const colorIndex = student?.id
-      ? student.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
+    const teacherInitials = teacher?.full_name
+      ?.split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2) || 'T';
+
+    // Lighter colors for availability (using -200 instead of -500)
+    const colors = isAvailability
+      ? [
+          'bg-blue-200 text-blue-800',
+          'bg-green-200 text-green-800',
+          'bg-purple-200 text-purple-800',
+          'bg-orange-200 text-orange-800',
+          'bg-pink-200 text-pink-800',
+          'bg-teal-200 text-teal-800',
+          'bg-indigo-200 text-indigo-800',
+        ]
+      : [
+          'bg-blue-500 text-white',
+          'bg-green-500 text-white',
+          'bg-purple-500 text-white',
+          'bg-orange-500 text-white',
+          'bg-pink-500 text-white',
+          'bg-teal-500 text-white',
+          'bg-indigo-500 text-white',
+        ];
+
+    const colorIndex = (student?.id || teacher?.id)
+      ? (student?.id || teacher?.id).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
       : 0;
 
     return (
-      <div className={`h-full rounded ${colors[colorIndex]} p-1.5 text-xs overflow-hidden`}>
-        <div className="truncate opacity-90">{student?.full_name?.split(' ')[0]}</div>
-        {view !== 'month' && (
+      <div className={`h-full rounded ${colors[colorIndex]} p-1.5 text-xs overflow-hidden ${isAvailability ? 'opacity-80 border-l-2 border-current' : ''}`}>
+        <div className="truncate opacity-90 font-medium">
+          {isAvailability ? (teacher?.full_name?.split(' ')[0] || 'Available') : (student?.full_name?.split(' ')[0] || 'Student')}
+        </div>
+        {view !== 'month' && !isAvailability && (
           <div className="truncate text-[10px] opacity-75">
             {teacher?.full_name?.split(' ')[0] || ''}
+          </div>
+        )}
+        {isAvailability && view !== 'month' && (
+          <div className="truncate text-[10px] opacity-75">
+            Available
           </div>
         )}
       </div>
@@ -288,7 +663,12 @@ export default function SchedulePage({ showToast, t, lang }) {
     );
   });
 
-  const dayLessonCount = dayEvents.length;
+  const dayLessons = dayEvents.filter(e => e.resource?.type !== 'availability');
+  const dayAvailability = dayEvents.filter(e => e.resource?.type === 'availability');
+  const dayLessonCount = dayLessons.length;
+
+  // Count distinct teachers with availability on this day
+  const distinctTeacherCount = new Set(dayAvailability.map(e => e.resource?.teacher_id)).size;
 
   const handleClick = () => {
     setDate(dateProp);
@@ -306,7 +686,7 @@ export default function SchedulePage({ showToast, t, lang }) {
     'bg-indigo-500 text-white',
   ];
 
-  const firstEvent = dayEvents[0];
+  const firstEvent = dayLessons[0];
   const colorIndex = firstEvent && firstEvent.student && firstEvent.student.id
     ? firstEvent.student.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
     : 0;
@@ -323,15 +703,22 @@ export default function SchedulePage({ showToast, t, lang }) {
         {dateProp.getDate()}
       </div>
       {dayLessonCount > 0 && (
-        <div className={`mt-0.9`}> 
+        <div className={`mt-0.5`}>
           <div className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors[colorIndex]}`}>
             {dayLessonCount} {dayLessonCount === 1 ? (t.lesson || 'Lesson') : (t.lessons || 'Lessons')}
           </div>
         </div>
       )}
+      {distinctTeacherCount > 0 && (
+        <div className={`mt-0.5`}>
+          <div className={`text-xs font-medium px-2 py-0.5 rounded-full bg-gray-200 text-gray-700`}>
+            {distinctTeacherCount} {distinctTeacherCount === 1 ? 'Teacher' : 'Teachers'}
+          </div>
+        </div>
+      )}
     </div>
   );
-}, [filteredEvents, setDate, setView]);
+}, [filteredEvents, setDate, setView, t]);
 
   // Custom toolbar component
   const CustomToolbar = ({ label, onNavigate, onView }) => {
@@ -346,14 +733,17 @@ export default function SchedulePage({ showToast, t, lang }) {
           >
             <ChevronLeft size={18} />
           </button>
-          <button
+          {/* <button
             type="button"
             onClick={navigateToToday}
             className="px-3 py-1.5 text-sm rounded hover:bg-gray-100 font-medium transition"
           >
             {t.today || 'Today'}
-          </button>
-          <button
+          </button> */}
+        
+          <span className="text-lg font-medium">{label}</span>
+
+            <button
             type="button"
             onClick={navigateToNext}
             className="p-1.5 rounded hover:bg-gray-100 transition"
@@ -361,7 +751,6 @@ export default function SchedulePage({ showToast, t, lang }) {
           >
             <ChevronRight size={18} />
           </button>
-          <span className="text-lg font-medium">{label}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -556,6 +945,193 @@ export default function SchedulePage({ showToast, t, lang }) {
         </Card>
       </div>
 
+      {/* Type Choice Modal */}
+      {showTypeChoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
+            <div className="mb-4">
+              <h2 className="text-lg font-medium">What would you like to add?</h2>
+              <p className="text-sm text-muted mt-1">
+                Selected: {format(slotInfo?.start || new Date(), 'MMM d, h:mma')} - {format(slotInfo?.end || new Date(), 'h:mma')}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleChooseScheduleLesson}
+                className="w-full rounded-md border border-line bg-white px-4 py-3 text-left hover:bg-gray-50 transition"
+              >
+                <div className="font-medium">Schedule a Lesson</div>
+                <div className="text-sm text-muted">Book a lesson for a student with a teacher</div>
+              </button>
+
+              <button
+                onClick={handleChooseAddAvailability}
+                className="w-full rounded-md border border-line bg-white px-4 py-3 text-left hover:bg-gray-50 transition"
+              >
+                <div className="font-medium">Add Teacher Availability</div>
+                <div className="text-sm text-muted">Set when a teacher is available for lessons</div>
+              </button>
+
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleCloseModal}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Availability Modal */}
+      {showAvailabilityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-medium">
+                {selectedEvent ? 'Edit Teacher Availability' : 'Add Teacher Availability'}
+              </h2>
+              <button
+                onClick={handleCloseModal}
+                className="rounded p-1 text-muted transition hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-sm text-muted bg-gray-50 p-2 rounded">
+                {format(slotInfo?.start || new Date(), 'MMM d, yyyy h:mma')} - {format(slotInfo?.end || new Date(), 'h:mma')}
+              </div>
+
+              <div>
+                <label className="block text-xs text-muted mb-1">Teacher *</label>
+                <select
+                  className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
+                  value={availabilityData.teacherId}
+                  onChange={(e) => setAvailabilityData({ ...availabilityData, teacherId: e.target.value })}
+                  required
+                >
+                  <option value="">Select a teacher</option>
+                  {teachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                {selectedEvent && (
+                  <Button onClick={() => handleDeleteAvailability(selectedEvent.id)} className="border-red-300 text-red-600 hover:bg-red-50">
+                    <Trash2 size={14} />
+                    Delete
+                  </Button>
+                )}
+                <Button onClick={handleCloseModal}>
+                  Cancel
+                </Button>
+                <Button primary onClick={handleSaveAvailability}>
+                  Save Availability
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conflict Warning Modal */}
+      {showConflictModal && conflictInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-medium text-orange-600">Cannot Delete Availability</h2>
+              <button
+                onClick={handleCloseModal}
+                className="rounded p-1 text-muted transition hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-sm">
+                <p className="font-medium text-ink mb-2">
+                  You have {conflictInfo.count} lesson{conflictInfo.count === 1 ? '' : 's'} scheduled during this availability period:
+                </p>
+                <div className="bg-orange-50 border border-orange-200 rounded-md p-3 space-y-2">
+                  {conflictInfo.lessons.map((lesson, index) => (
+                    <div key={lesson.lessonId} className="text-sm">
+                      <div className="font-medium">{index + 1}. {lesson.studentName}</div>
+                      <div className="text-muted text-xs">
+                        {format(lesson.scheduledAt, 'MMM d, h:mma')} ({lesson.duration} min)
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="text-sm text-muted">
+                Please reschedule or cancel these lessons first, then try deleting the availability again.
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button primary onClick={handleCloseModal}>
+                  OK, I Understand
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Confirmation Modal */}
+      {showFeedbackModal && lessonForFeedback && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-medium">Give Lesson Feedback</h2>
+              <button
+                onClick={handleCloseModal}
+                className="rounded p-1 text-muted transition hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-sm">
+                <p className="font-medium text-ink mb-2">
+                  Do you want to give feedback for this lesson?
+                </p>
+                <div className="bg-gray-50 border border-line rounded-md p-3">
+                  <div className="text-sm">
+                    <div className="text-muted text-xs">Student</div>
+                    <div className="font-medium">{lessonForFeedback.student?.full_name || 'Student'}</div>
+                  </div>
+                  <div className="mt-2 text-sm">
+                    <div className="text-muted text-xs">Date & Time</div>
+                    <div className="font-medium">
+                      {format(new Date(lessonForFeedback.resource.scheduled_at), 'MMM d, yyyy h:mma')}
+                    </div>
+                    <div className="text-xs text-muted">({lessonForFeedback.resource.duration_minutes} min)</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button onClick={handleCloseModal}>
+                  Cancel
+                </Button>
+                <Button primary onClick={handleGiveFeedback}>
+                  Yes, Give Feedback
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Lesson Modal */}
       {showLessonModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -573,10 +1149,58 @@ export default function SchedulePage({ showToast, t, lang }) {
             </div>
 
             <div className="space-y-4">
-              {slotInfo && (
-                <div className="text-sm text-muted bg-gray-50 p-2 rounded">
-                  {format(slotInfo.start, 'MMM d, yyyy h:mma')} - {format(slotInfo.end, 'h:mma')}
-                </div>
+              {selectedEvent ? (
+                // Editing mode - show editable date/time for admins
+                isAdmin ? (
+                  <>
+                    <div>
+                      <label className="block text-xs text-muted mb-1">Start Date & Time *</label>
+                      <input
+                        type="datetime-local"
+                        className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
+                        value={lessonData.startAt}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          if (newValue === '') return;
+                          setLessonData({ ...lessonData, startAt: newValue });
+                        }}
+                        required
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted mb-1">Duration *</label>
+                      <select
+                        className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
+                        value={lessonData.duration_minutes}
+                        onChange={(e) => setLessonData({ ...lessonData, duration_minutes: parseInt(e.target.value) })}
+                      >
+                        {[30, 45, 50, 60, 90, 120].map((duration) => (
+                          <option key={duration} value={duration}>
+                            {duration} min
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="text-sm text-muted bg-gray-50 p-2 rounded">
+                      End time: {lessonData.startAt && lessonData.duration_minutes ?
+                        format(new Date(new Date(lessonData.startAt).getTime() + lessonData.duration_minutes * 60000), 'MMM d, yyyy h:mma')
+                        : '—'}
+                    </div>
+                  </>
+                ) : (
+                  // Teachers see read-only
+                  <div className="text-sm text-muted bg-gray-50 p-2 rounded">
+                    {format(selectedEvent.start, 'MMM d, yyyy h:mma')} - {format(selectedEvent.end, 'h:mma')}
+                  </div>
+                )
+              ) : (
+                // Creating new lesson
+                slotInfo && (
+                  <div className="text-sm text-muted bg-gray-50 p-2 rounded">
+                    {format(slotInfo.start, 'MMM d, yyyy h:mma')} - {format(slotInfo.end, 'h:mma')}
+                  </div>
+                )
               )}
 
               <div>
@@ -606,31 +1230,30 @@ export default function SchedulePage({ showToast, t, lang }) {
                     required
                   >
                     <option value="">Select a teacher</option>
-                    {teachers.map((teacher) => (
+                    {getAvailableTeachersForSlot().map((teacher) => (
                       <option key={teacher.id} value={teacher.id}>
                         {teacher.full_name}
                       </option>
                     ))}
                   </select>
+                  {slotInfo && getAvailableTeachersForSlot().length === 0 && (
+                    <p className="text-xs text-orange-600 mt-1">No teachers available for this time slot</p>
+                  )}
+                  {slotInfo && getAvailableTeachersForSlot().length > 0 && getAvailableTeachersForSlot().length < teachers.length && (
+                    <p className="text-xs text-muted mt-1">
+                      Showing {getAvailableTeachersForSlot().length} of {teachers.length} teachers (others unavailable or have conflicts)
+                    </p>
+                  )}
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs text-muted mb-1">Duration (minutes)</label>
-                <select
-                  className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
-                  value={lessonData.duration_minutes}
-                  onChange={(e) => setLessonData({ ...lessonData, duration_minutes: parseInt(e.target.value) })}
-                >
-                  {[30, 45, 50, 60, 90, 120].map((duration) => (
-                    <option key={duration} value={duration}>
-                      {duration} min
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="flex justify-end gap-3 pt-2">
+                {selectedEvent && (
+                  <Button onClick={handleDeleteLesson} className="border-red-300 text-red-600 hover:bg-red-50">
+                    <Trash2 size={14} />
+                    Delete
+                  </Button>
+                )}
                 <Button onClick={handleCloseModal}>
                   Cancel
                 </Button>

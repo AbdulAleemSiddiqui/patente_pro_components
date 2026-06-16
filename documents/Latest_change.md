@@ -109,7 +109,6 @@ src/
 │   ├── LessonLogPage.jsx
 │   ├── SettingsPage.jsx
 │   ├── UsersPage.jsx
-│   ├── AvailabilityPage.jsx
 │   ├── SchedulePage.jsx
 │   ├── ManoeuvresPage.jsx
 │   └── SwapPage.jsx
@@ -176,7 +175,7 @@ Upcoming work:
 * ✅ Admin user creation system implemented (June 9, 2026)
 * ✅ User management UI with modal forms added
 * ✅ Auth store enhanced with automatic tenant_id fetching
-* 🔄 Moving mocked demo data into seeded database tables
+* ✅ Mock data moved to seeded database tables
 
 ### Admin User Creation System (June 9, 2026)
 
@@ -249,3 +248,135 @@ Upcoming work:
    │  - full_name, email, phone       │
    └──────────────────────────────────┘
    ```
+
+---
+
+## 🆕 Latest Features (June 12-13, 2026)
+
+### Teacher Availability & Calendar Integration
+
+**Problem Solved:**
+- Teachers need a way to set their availability for lesson scheduling
+- Admins needed to check if teachers are available before scheduling lessons
+- Needed a unified calendar interface instead of separate pages
+
+**Solution Implemented:**
+
+1. **Database Schema Updated** (`supabase/migrations/202606060001_initial_schema.sql`):
+   - Changed `teacher_availability` from weekly recurring (`day_of_week`, `start_time`, `end_time`) to date-specific blocks (`start_at`, `end_at`)
+   - Added `tenant_id` column for proper multi-tenancy
+   - Updated indexes for performance
+
+2. **New API Functions** (`src/lib/api.js`):
+   - `listTeacherAvailability({ tenantId, teacherId, from, to })` - Fetch availability for date range
+   - `createTeacherAvailability({ tenantId, teacherId, startAt, endAt })` - Create availability block
+   - `deleteTeacherAvailability({ id })` - Delete availability block
+   - `updateLesson({ id, ... })` - Update existing lessons
+   - `deleteLesson({ id })` - Delete lessons
+
+3. **Combined Calendar** (`src/pages/SchedulePage.jsx`):
+   - **Type-Choice Popup**: Admins selecting time slots see "Schedule Lesson" or "Add Teacher Availability" options
+   - **Availability Rendering**: Light, semi-transparent colors with left border (available lessons remain solid)
+   - **Month View**: Shows both lesson count and distinct teacher availability count per day
+   - **Smart Teacher Filtering**: Teacher dropdown only shows teachers who:
+     - Have availability covering the selected time slot
+     - Have no conflicting lessons during that time
+   - **Lesson Editing**: Admins can edit lesson start time and duration (end time auto-calculated)
+   - **Conflict Checking**: Cannot delete availability if lessons are scheduled during that time
+   - **Delete Functionality**: Delete buttons added to both Lesson and Availability modals
+
+4. **Teacher Feedback Flow**:
+   - Teachers clicking on lessons in Day View see "Give Lesson Feedback" modal
+   - On confirmation, redirects to Log lesson page with pre-filled, read-only lesson details
+   - Supports easy lesson feedback submission for completed lessons
+
+5. **Navigation Updated** (`src/lib/roleAccess.js`):
+   - Removed "Availability" menu item (now integrated into Schedule page)
+   - Removed availability page references from routing
+
+---
+
+## Usage
+
+### For Admins - Schedule Page
+
+1. **View Schedule**: 
+   - Month/Week/Day/Agenda views
+   - Color-coded by student
+   - Teacher availability shown in lighter colors
+
+2. **Schedule New Lesson**:
+   - Drag to select time slot (Week/Day view)
+   - Choose "Schedule Lesson" from popup
+   - Select student and teacher (only available teachers shown)
+   - Duration determined by slot selection
+
+3. **Add Teacher Availability**:
+   - Drag to select time slot (Week/Day view)
+   - Choose "Add Teacher Availability" from popup
+   - Select teacher
+   - Duration determined by slot selection
+
+4. **Edit Lesson**:
+   - Click on existing lesson
+   - Change start time (datetime-local input)
+   - Change duration (dropdown)
+   - End time auto-calculated and displayed
+   - Delete option available
+
+5. **Delete/Cancel Availability**:
+   - Click on availability block
+   - Delete button in modal
+   - System checks for conflicting lessons first
+   - Shows warning if lessons exist during that time
+
+### For Teachers - Schedule Page
+
+1. **View Schedule**:
+   - See your upcoming lessons
+   - See your availability blocks
+   - Month/Week/Day views available
+
+2. **Schedule Lessons**:
+   - Drag to select time slot (Week/Day view)
+   - Opens lesson modal directly (no type-choice)
+   - Select student from dropdown
+   - Duration determined by slot selection
+
+3. **Give Feedback**:
+   - Click on lesson in Day view
+   - Confirm "Give Lesson Feedback"
+   - Redirected to Log lesson page with pre-filled details
+
+---
+
+## Technical Details
+
+### Availability Data Model
+
+```sql
+CREATE TABLE teacher_availability (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid not null references users(id) on delete cascade,
+  tenant_id uuid not null references tenants(id) on delete cascade,
+  start_at timestamptz not null,
+  end_at timestamptz not null,
+  check (start_at < end_at)
+);
+```
+
+### Conflict Detection Logic
+
+When deleting availability:
+- System checks for lessons scheduled during the availability period
+- Excludes cancelled lessons
+- Shows warning with student names and lesson details
+- Blocks deletion until lessons are rescheduled/cancelled
+
+### Teacher Availability Checking
+
+For scheduling and editing:
+- Checks if teacher has availability block covering entire lesson duration
+- Checks for conflicting lessons (excluding current lesson when editing)
+- Returns only teachers who pass both checks
+- Shows helpful count messages ("X of Y teachers available")
