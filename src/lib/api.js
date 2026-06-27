@@ -64,6 +64,39 @@ export async function listLessons({ tenantId, teacherId, studentId } = {}) {
 }
 
 /**
+ * Lessons with their feedback (notes, general_rating, highways) and maneuver
+ * ratings (with maneuver + parent type) nested in. Powers the Progress page.
+ */
+export async function listLessonsWithFeedback({ tenantId, teacherId, studentId } = {}) {
+  const client = requireSupabase();
+  let query = client
+    .from('lessons')
+    .select(
+      `id, status, scheduled_at, duration_minutes, student_id, teacher_id,
+       teacher:users!lessons_teacher_id_fkey(id, full_name),
+       student:users!lessons_student_id_fkey(id, full_name),
+       feedback:lesson_feedback(
+         notes, general_rating,
+         from_highway:highways!lesson_feedback_from_highway_id_fkey(id, name),
+         to_highway:highways!lesson_feedback_to_highway_id_fkey(id, name),
+         ratings:maneuver_ratings(
+           rating,
+           maneuver:maneuvers(id, name, order_index, type:maneuver_types(id, name, order_index))
+         )
+       )`,
+    )
+    .order('scheduled_at');
+
+  query = byTenant(query, tenantId);
+  if (teacherId) query = query.eq('teacher_id', teacherId);
+  if (studentId) query = query.eq('student_id', studentId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+/**
  * List teacher availability blocks for a date range
  */
 export async function listTeacherAvailability({ tenantId, teacherId, from, to } = {}) {
@@ -111,22 +144,21 @@ export async function getTenant({ tenantId } = {}) {
   return data;
 }
 
-export async function listRouteTypesForTenant({ tenantId } = {}) {
+export async function listManeuvers({ tenantId } = {}) {
   const client = requireSupabase();
-  const tenant = await getTenant({ tenantId });
-  const { data, error } = await client
-    .from('route_types')
-    .select('*, route_sub_types(*)')
-    .eq('city_id', tenant.city_id)
-    .order('name');
-
+  let query = client
+    .from('maneuvers')
+    .select('*, type:maneuver_types(*)')
+    .order('order_index');
+  query = byTenant(query, tenantId);
+  const { data, error } = await query;
   if (error) throw error;
   return data;
 }
 
-export async function listManeuvers({ tenantId } = {}) {
+export async function listManeuverTypes({ tenantId } = {}) {
   const client = requireSupabase();
-  let query = client.from('maneuvers').select('*').order('order_index');
+  let query = client.from('maneuver_types').select('*').order('order_index');
   query = byTenant(query, tenantId);
   const { data, error } = await query;
   if (error) throw error;
@@ -142,49 +174,30 @@ export async function listErrorTags({ tenantId } = {}) {
   return data;
 }
 
-export async function listRouteTypes({ tenantId } = {}) {
+export async function listHighways({ tenantId } = {}) {
   const client = requireSupabase();
-  const user = requireSupabase().auth.getUser();
-
-  // Get tenant_id from auth user metadata
-  const { data: userData } = await client
-    .from('users')
-    .select('tenant_id')
-    .eq('id', (await user).data.user.id)
-    .single();
-
-  const currentTenantId = userData?.tenant_id;
-
-  // First get the city for this tenant
-  const { data: tenantData } = await client
-    .from('tenants')
-    .select('city_id')
-    .eq('id', currentTenantId)
-    .single();
-
-  if (!tenantData) return [];
-
-  // Then get route types for that city
-  const { data, error } = await client
-    .from('route_types')
-    .select('*, route_sub_types(*)')
-    .eq('city_id', tenantData.city_id)
-    .order('name');
-
-  if (error) throw error;
-  return data || [];
-}
-
-export async function listRoutesForCity(cityId) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from('route_types')
-    .select('*, route_sub_types(*)')
-    .eq('city_id', cityId)
-    .order('name');
-
+  let query = client.from('highways').select('*').order('name');
+  query = byTenant(query, tenantId);
+  const { data, error } = await query;
   if (error) throw error;
   return data;
+}
+
+export async function createHighway({ tenantId, name }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('highways')
+    .insert({ tenant_id: tenantId, name })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteHighway({ id }) {
+  const client = requireSupabase();
+  const { error } = await client.from('highways').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export async function createLesson(payload) {
@@ -239,10 +252,10 @@ export async function submitLessonFeedback({ feedback, maneuverRatings, errorTag
     const { data, error: updateError } = await client
       .from('lesson_feedback')
       .update({
-        route_type_id: feedback.route_type_id,
-        route_sub_type_id: feedback.route_sub_type_id,
         notes: feedback.notes,
         general_rating: feedback.general_rating,
+        from_highway_id: feedback.from_highway_id ?? null,
+        to_highway_id: feedback.to_highway_id ?? null,
       })
       .eq('id', existingFeedback.id)
       .select()
@@ -289,6 +302,14 @@ export async function submitLessonFeedback({ feedback, maneuverRatings, errorTag
       })),
     );
     if (error) throw error;
+  }
+
+  // Mark the lesson as completed so it no longer appears in the loggable dropdown
+  try {
+    await client.from('lessons').update({ status: 'completed' }).eq('id', feedback.lesson_id);
+  } catch (statusError) {
+    // Feedback was saved; a status-update failure is non-fatal but should be logged
+    console.error('Failed to mark lesson as completed:', statusError);
   }
 
   return savedFeedback;

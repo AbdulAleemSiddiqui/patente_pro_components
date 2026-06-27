@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Save, Car } from 'lucide-react';
-import { format } from 'date-fns';
+import { Save } from 'lucide-react';
+import { format, addMinutes, parseISO } from 'date-fns';
 import {
   Button, Card, Field, fieldClass, Page, PageHeader,
 } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
-import { listUsers, listRouteTypes, listManeuvers, submitLessonFeedback } from '../lib/api.js';
+import {
+  listUsers, listLessons, listManeuvers, listHighways, submitLessonFeedback,
+} from '../lib/api.js';
 
 function toggleSet(setter, key) {
   setter((prev) => {
@@ -15,36 +17,39 @@ function toggleSet(setter, key) {
   });
 }
 
-const ICON_MAP = {
-  car: '🚗',
-  local_parking: '🅿️',
-  arrows_left_right: '↔️',
-  eye: '👁️',
-  check_circle: '✓',
-};
+// Format a lesson as "dd/MM/yyyy - HH:mm to HH:mm"
+function formatLessonLabel(lesson) {
+  const start = typeof lesson.scheduled_at === 'string' ? parseISO(lesson.scheduled_at) : new Date(lesson.scheduled_at);
+  const end = addMinutes(start, lesson.duration_minutes);
+  return `${format(start, 'dd/MM/yyyy')} - ${format(start, 'HH:mm')} to ${format(end, 'HH:mm')}`;
+}
 
 export default function LessonLogPage({ showToast, t, navigate }) {
   const { tenantId, role, session } = useAuthStore();
   const [students, setStudents] = useState([]);
-  const [routeTypes, setRouteTypes] = useState([]);
   const [manoeuvres, setManoeuvres] = useState([]);
+  const [highways, setHighways] = useState([]);
+  const [lessons, setLessons] = useState([]); // lessons for the selected student
 
-  // Form state
+  // Cascading selection state
   const [studentId, setStudentId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [duration, setDuration] = useState(50);
+  const [selectedLesson, setSelectedLesson] = useState(null); // full lesson object
+  const [prefilled, setPrefilled] = useState(false); // opened from calendar
+
+  // Feedback state
   const [notes, setNotes] = useState('');
   const [generalRating, setGeneralRating] = useState('good'); // 'poor', 'fair', 'good'
-  const [prefilledLesson, setPrefilledLesson] = useState(null);
+  const [fromHighwayId, setFromHighwayId] = useState('');
+  const [toHighwayId, setToHighwayId] = useState('');
 
-  // Selections
-  const [selectedRouteType, setSelectedRouteType] = useState(null);
-  const [selectedSubType, setSelectedSubType] = useState(null);
+  // Manoeuvre state
   const [selectedManoeuvres, setSelectedManoeuvres] = useState(new Set());
   const [manoeuvreRatings, setManoeuvreRatings] = useState({});
 
   const [loading, setLoading] = useState(true);
+  const [loadingLessons, setLoadingLessons] = useState(false);
 
+  // Load catalog data
   useEffect(() => {
     (async () => {
       try {
@@ -52,107 +57,122 @@ export default function LessonLogPage({ showToast, t, navigate }) {
           setLoading(false);
           return;
         }
+        const isTeacher = role === 'teacher';
+        const teacherId = isTeacher ? session?.user?.id : undefined;
 
-        const [studentsData, routeTypesData, manoeuvresData] = await Promise.all([
+        const [studentsData, manoeuvresData, highwaysData, teacherLessons] = await Promise.all([
           listUsers({ tenantId, role: 'student' }),
-          listRouteTypes({ tenantId }),
           listManeuvers({ tenantId }),
+          listHighways({ tenantId }),
+          // Teachers only see students who have at least one loggable lesson with them
+          teacherId ? listLessons({ tenantId, teacherId }) : Promise.resolve(null),
         ]);
 
-        setStudents(studentsData || []);
-        setRouteTypes(routeTypesData || []);
-        setManoeuvres(manoeuvresData || []);
-
-        // Set first student as default if no prefilled lesson
-        if (!prefilledLesson && studentsData?.length > 0) {
-          setStudentId(studentsData[0].id);
+        if (teacherId) {
+          // Only students with a still-scheduled lesson with this teacher are pickable
+          const eligibleStudentIds = new Set(
+            (teacherLessons || []).filter((l) => l.status === 'scheduled').map((l) => l.student_id),
+          );
+          setStudents((studentsData || []).filter((s) => eligibleStudentIds.has(s.id)));
+        } else {
+          setStudents(studentsData || []);
         }
+        setManoeuvres(manoeuvresData || []);
+        setHighways(highwaysData || []);
       } catch (error) {
         console.error('Failed to load data', error);
       } finally {
         setLoading(false);
       }
     })();
-  }, [tenantId, prefilledLesson]);
+  }, [tenantId, role, session]);
 
-  // Load pre-filled lesson data from sessionStorage
+  // Case a: opened from calendar — read prefilled lesson from sessionStorage
   useEffect(() => {
     const feedbackLesson = sessionStorage.getItem('feedbackLesson');
-    if (feedbackLesson) {
-      try {
-        const lessonData = JSON.parse(feedbackLesson);
-        setPrefilledLesson(lessonData);
-
-        // Populate fields with lesson data
-        if (lessonData.studentId) setStudentId(lessonData.studentId);
-        if (lessonData.scheduledAt) {
-          const lessonDate = new Date(lessonData.scheduledAt);
-          setDate(lessonDate.toISOString().slice(0, 10));
-        }
-        if (lessonData.duration) setDuration(lessonData.duration);
-
-        sessionStorage.removeItem('feedbackLesson');
-      } catch (error) {
-        console.error('Failed to parse feedback lesson data:', error);
-      }
+    if (!feedbackLesson) return;
+    try {
+      const lessonData = JSON.parse(feedbackLesson);
+      setPrefilled(true);
+      setStudentId(lessonData.studentId || '');
+      setSelectedLesson({
+        id: lessonData.lessonId,
+        student_id: lessonData.studentId,
+        teacher_id: lessonData.teacherId,
+        scheduled_at: lessonData.scheduledAt,
+        duration_minutes: lessonData.duration,
+        teacherName: lessonData.teacherName,
+        studentName: lessonData.studentName,
+      });
+      sessionStorage.removeItem('feedbackLesson');
+    } catch (error) {
+      console.error('Failed to parse feedback lesson data:', error);
     }
   }, []);
 
-  const handleRouteTypeChange = (routeType) => {
-    setSelectedRouteType(routeType);
-    setSelectedSubType(null); // Reset sub-type when route type changes
+  // When student changes (case b), fetch that student's lessons
+  useEffect(() => {
+    // Skip fetch in prefilled mode — lesson is already known
+    if (prefilled || !studentId || !tenantId) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingLessons(true);
+      try {
+        // Teachers only see their own lessons; admins see all (matches calendar behaviour)
+        const teacherId = role === 'teacher' ? session?.user?.id : undefined;
+        const data = await listLessons({ tenantId, studentId, teacherId });
+        if (cancelled) return;
+        const visible = (data || [])
+          .filter((l) => l.status === 'scheduled')
+          .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
+        setLessons(visible);
+      } catch (error) {
+        console.error('Failed to load lessons', error);
+      } finally {
+        if (!cancelled) setLoadingLessons(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [studentId, tenantId, prefilled, role, session]);
+
+  const handleStudentChange = (id) => {
+    setStudentId(id);
+    setSelectedLesson(null); // reset downstream selection
+  };
+
+  const handleLessonChange = (lessonId) => {
+    const lesson = lessons.find((l) => l.id === lessonId) || null;
+    setSelectedLesson(lesson);
   };
 
   const handleManoeuvreRating = (manoeuvreId, rating) => {
-    setManoeuvreRatings(prev => ({
-      ...prev,
-      [manoeuvreId]: rating,
-    }));
-    // Auto-select the manoeuvre if rating is given
+    setManoeuvreRatings((prev) => ({ ...prev, [manoeuvreId]: rating }));
     if (rating && !selectedManoeuvres.has(manoeuvreId)) {
       setSelectedManoeuvres(new Set([...selectedManoeuvres, manoeuvreId]));
     }
   };
 
-  const getRatingColor = (rating) => {
-    if (rating === 'poor') return 'bg-red-500';
-    if (rating === 'fair') return 'bg-[#d4820a]';
-    if (rating === 'good') return 'bg-green-500';
-    return 'bg-gray-300';
-  };
-
-  const getRatingBorderColor = (rating) => {
-    if (rating === 'poor') return 'border-red-500';
-    if (rating === 'fair') return 'border-[#d4820a]';
-    if (rating === 'good') return 'border-green-500';
-    return 'border-gray-300';
-  };
+  const lessonLocked = !!selectedLesson; // gates the rest of the form
+  const duration = selectedLesson?.duration_minutes ?? '';
 
   const handleSubmit = async () => {
     try {
-      if (!prefilledLesson?.lessonId) {
-        showToast('No lesson selected', 'error');
+      if (!selectedLesson?.id) {
+        showToast('Select a lesson first', 'error');
         return;
       }
 
-      if (!selectedRouteType) {
-        showToast('Please select a route type', 'error');
-        return;
-      }
-
-      // Prepare maneuver ratings data
       const maneuverRatingsData = Array.from(selectedManoeuvres).map((manoeuvreId) => ({
         maneuver_id: manoeuvreId,
         rating: manoeuvreRatings[manoeuvreId] || 'good',
       }));
 
-      // Prepare feedback data
       const feedbackData = {
-        lesson_id: prefilledLesson.lessonId,
-        route_type_id: selectedRouteType,
-        route_sub_type_id: selectedSubType || null,
+        lesson_id: selectedLesson.id,
         notes: notes || '',
         general_rating: generalRating,
+        from_highway_id: fromHighwayId || null,
+        to_highway_id: toHighwayId || null,
       };
 
       await submitLessonFeedback({
@@ -161,11 +181,8 @@ export default function LessonLogPage({ showToast, t, navigate }) {
       });
 
       showToast('Feedback saved successfully!');
-
-      // Clear sessionStorage and navigate back
       sessionStorage.removeItem('feedbackLesson');
-      navigate('/schedule');
-
+      navigate(prefilled ? 'schedule' : 'dashboard');
     } catch (error) {
       console.error('Failed to save feedback:', error);
       showToast('Failed to save feedback', 'error');
@@ -182,32 +199,19 @@ export default function LessonLogPage({ showToast, t, navigate }) {
     );
   }
 
-  const selectedRouteTypeData = routeTypes.find(rt => rt.id === selectedRouteType);
-
-  const ICON_LABELS = {
-    car: 'Vehicle Check',
-    local_parking: 'Parking',
-    arrows_left_right: 'Road maneuvers',
-    eye: 'Behaviors',
-    check_circle: 'Other',
-  };
-
-  const getDifficultyBadgeColor = (difficulty) => {
-    switch (difficulty) {
-      case 'Base': return 'badge-green';
-      case 'Medium': return 'badge-orange';
-      case 'Difficult': return 'badge-red';
-      case 'Critic': return 'badge-purple';
-      default: return 'badge-gray';
-    }
-  };
-
-  // Group manoeuvres by icon/category
-  const getManoeuvresByCategory = () => {
-    return manoeuvres.reduce((acc, manoeuvre) => {
-      const icon = manoeuvre.icon || 'check_circle';
-      if (!acc[icon]) acc[icon] = [];
-      acc[icon].push(manoeuvre);
+  // Group manoeuvres by their parent type (FASE 1 / FASE 2 / PERCORSO URBANO),
+  // ordered by the type's order_index, then each maneuver's order_index.
+  const getManoeuvresByType = () => {
+    const sorted = [...manoeuvres].sort((a, b) => {
+      const ta = a.type?.order_index ?? 999;
+      const tb = b.type?.order_index ?? 999;
+      if (ta !== tb) return ta - tb;
+      return (a.order_index ?? 0) - (b.order_index ?? 0);
+    });
+    return sorted.reduce((acc, manoeuvre) => {
+      const type = manoeuvre.type?.name || 'Other';
+      if (!acc[type]) acc[type] = [];
+      acc[type].push(manoeuvre);
       return acc;
     }, {});
   };
@@ -221,98 +225,95 @@ export default function LessonLogPage({ showToast, t, navigate }) {
         <div className="lg:col-span-3 space-y-4">
           <Card title={t.lessonDetails}>
             <div className="flex flex-col gap-3 p-4">
-              {prefilledLesson && (
+              {prefilled && selectedLesson?.teacherName && (
                 <div className="mb-2">
                   <div className="text-xs text-muted mb-1">Instructor</div>
-                  <div className="text-sm font-medium">{prefilledLesson.teacherName}</div>
+                  <div className="text-sm font-medium">{selectedLesson.teacherName}</div>
                 </div>
               )}
 
               <Field label={t.student}>
-                {prefilledLesson ? (
-                  <div className="text-sm font-medium py-2">
-                    {prefilledLesson.studentName}
-                  </div>
-                ) : (
-                  <select
-                    className={fieldClass}
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                  >
-                    <option value="">Select a student</option>
-                    {students.map((student) => (
-                      <option key={student.id} value={student.id}>
-                        {student.full_name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </Field>
-
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                <Field label={t.date}>
-                  {prefilledLesson ? (
-                    <div className="text-sm font-medium py-2">
-                      {format(new Date(prefilledLesson.scheduledAt), 'MMM d, yyyy')}
-                    </div>
-                  ) : (
-                    <input
-                      className={fieldClass}
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                    />
-                  )}
-                </Field>
-                <Field label={t.duration}>
-                  {prefilledLesson ? (
-                    <div className="text-sm font-medium py-2">
-                      {prefilledLesson.duration} min
-                    </div>
-                  ) : (
-                    <input
-                      className={fieldClass}
-                      type="number"
-                      value={duration}
-                      min="30"
-                      max="120"
-                      onChange={(e) => setDuration(Number(e.target.value))}
-                    />
-                  )}
-                </Field>
-              </div>
-
-              <Field label="Route Type">
                 <select
                   className={fieldClass}
-                  value={selectedRouteType || ''}
-                  onChange={(e) => handleRouteTypeChange(e.target.value)}
+                  value={studentId}
+                  onChange={(e) => handleStudentChange(e.target.value)}
+                  disabled={prefilled}
                 >
-                  <option value="">Select route type</option>
-                  {routeTypes.map((routeType) => (
-                    <option key={routeType.id} value={routeType.id}>
-                      {routeType.name}
+                  <option value="">Select a student</option>
+                  {students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.full_name}
                     </option>
                   ))}
                 </select>
               </Field>
 
-              {selectedRouteTypeData?.requires_sub_selection && selectedRouteTypeData?.route_sub_types && (
-                <Field label="Route Sub-Type">
-                  <select
-                    className={fieldClass}
-                    value={selectedSubType || ''}
-                    onChange={(e) => setSelectedSubType(e.target.value)}
-                  >
-                    <option value="">Select sub-type</option>
-                    {selectedRouteTypeData.route_sub_types.map((subType) => (
-                      <option key={subType.id} value={subType.id}>
-                        {subType.label}
+              <Field label="Lesson">
+                <select
+                  className={fieldClass}
+                  value={selectedLesson?.id || ''}
+                  onChange={(e) => handleLessonChange(e.target.value)}
+                  disabled={prefilled || !studentId || loadingLessons}
+                >
+                  <option value="">
+                    {loadingLessons ? 'Loading...' : !studentId ? 'Select a student first' : 'Select a lesson'}
+                  </option>
+                  {prefilled && selectedLesson ? (
+                    <option value={selectedLesson.id}>{formatLessonLabel(selectedLesson)}</option>
+                  ) : (
+                    lessons.map((lesson) => (
+                      <option key={lesson.id} value={lesson.id}>
+                        {formatLessonLabel(lesson)}
                       </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
+                    ))
+                  )}
+                </select>
+              </Field>
+
+              <Field label={t.duration}>
+                <input
+                  className={fieldClass}
+                  type="text"
+                  value={duration === '' ? '' : `${duration} min`}
+                  disabled
+                  placeholder="—"
+                />
+              </Field>
+
+              {/* Autostrada (highways) picker */}
+              <div className="rounded-md border border-line p-3">
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+                  {t.highway}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label={`${t.highway}: ${t.toLabel}`}>
+                    <select
+                      className={fieldClass}
+                      value={toHighwayId}
+                      onChange={(e) => setToHighwayId(e.target.value)}
+                      disabled={!lessonLocked}
+                    >
+                      <option value="">—</option>
+                      {highways.map((hw) => (
+                        <option key={hw.id} value={hw.id}>{hw.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label={`${t.highway}: ${t.fromLabel}`}>
+                    <select
+                      className={fieldClass}
+                      value={fromHighwayId}
+                      onChange={(e) => setFromHighwayId(e.target.value)}
+                      disabled={!lessonLocked}
+                    >
+                      <option value="">—</option>
+                      {highways.map((hw) => (
+                        <option key={hw.id} value={hw.id}>{hw.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </div>
 
               <Field label={t.generalRating}>
                 <div className="flex gap-2">
@@ -321,6 +322,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                       key={rating}
                       type="button"
                       onClick={() => setGeneralRating(rating)}
+                      disabled={!lessonLocked}
                       className={`w-8 h-8 rounded-full border-2 transition ${
                         generalRating === rating
                           ? rating === 'poor' ? 'border-red-500 bg-red-500'
@@ -349,11 +351,12 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                   placeholder={t.notesPlaceholder}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
+                  disabled={!lessonLocked}
                 />
               </Field>
 
               <div className="flex justify-end pt-2">
-                <Button primary onClick={handleSubmit} className="max-w-fit">
+                <Button primary onClick={handleSubmit} className="max-w-fit" >
                   <Save size={16} />
                   {t.saveLesson}
                 </Button>
@@ -364,29 +367,24 @@ export default function LessonLogPage({ showToast, t, navigate }) {
 
         {/* Right Column - Manoeuvres */}
         <div className="lg:col-span-2 space-y-4">
-          <Card title="Performed Manoeuvres">
+          <Card title="TIPOLOGIA">
             <div className="p-4">
-              {manoeuvres.length === 0 ? (
+              {!lessonLocked ? (
+                <div className="text-sm text-muted py-4">Select a lesson to evaluate manoeuvres</div>
+              ) : manoeuvres.length === 0 ? (
                 <div className="text-sm text-muted py-4">No manoeuvres available</div>
               ) : (
                 <div className="space-y-3">
-                  {Object.entries(getManoeuvresByCategory()).map(([iconKey]) => {
-                    const Icon = ICON_MAP[iconKey] || (() => '✓');
+                  {Object.entries(getManoeuvresByType()).map(([typeName, items]) => {
                     return (
-                      <div key={iconKey} className="border-b border-line pb-3">
+                      <div key={typeName} className="border-b border-line pb-3">
                         <div className="flex items-center gap-2 mb-2">
-                          {typeof Icon === 'string' ? (
-                            <span className="text-lg">{Icon}</span>
-                          ) : (
-                            <Icon size={18} />
-                          )}
-                          <span className="text-sm font-medium">{ICON_LABELS[iconKey] || 'Other'}</span>
+                          <span className="text-sm font-medium">{typeName}</span>
                         </div>
 
-                        {getManoeuvresByCategory()[iconKey].map((manoeuvre) => {
+                        {items.map((manoeuvre) => {
                           const isSelected = selectedManoeuvres.has(manoeuvre.id);
                           const currentRating = manoeuvreRatings[manoeuvre.id];
-                          const badgeColor = getDifficultyBadgeColor(manoeuvre.difficulty);
 
                           return (
                             <div
@@ -400,15 +398,6 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                                 <div className="">
                                   <div className="text-sm">{manoeuvre.name}</div>
                                 </div>
-                                <span className={`metric-badge text-xs px-2 py-0.5 rounded-full ${
-                                  badgeColor === 'badge-green' ? 'bg-green-100 text-green-700' :
-                                  badgeColor === 'badge-orange' ? 'bg-orange-100 text-orange-700' :
-                                  badgeColor === 'badge-red' ? 'bg-red-100 text-red-700' :
-                                  badgeColor === 'badge-purple' ? 'bg-purple-100 text-purple-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {manoeuvre.difficulty}
-                                </span>
                               </div>
 
                               <div className="traffic-light flex gap-2 ml-4">

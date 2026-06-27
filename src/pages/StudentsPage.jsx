@@ -1,16 +1,69 @@
-import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import {
-  Badge, Card, Dot, IconButton, Page, PageHeader,
-  Pill, ProgressBar, SectionLabel, Stars, Tag,
+  Card, Page, PageHeader, Stars,
 } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
-import { listUsers } from '../lib/api.js';
+import { listUsers, listLessonsWithFeedback } from '../lib/api.js';
 
-export default function StudentsPage({ navigate, t, lang }) {
+// Map general_rating (poor/fair/good) onto a 1–5 star scale for display/averaging
+const RATING_VALUE = { poor: 1, fair: 3, good: 5 };
+
+function avgGeneralRating(lessons) {
+  const vals = lessons
+    .map((l) => l.feedback?.general_rating)
+    .filter((r) => r && RATING_VALUE[r] != null)
+    .map((r) => RATING_VALUE[r]);
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+// Per-student summary derived from their lessons
+function summarize(lessons) {
+  const active = lessons.filter((l) => l.status !== 'cancelled');
+  const completed = active.filter((l) => l.status === 'completed');
+  const pending = active.filter((l) => l.status === 'scheduled');
+  return {
+    total: active.length,
+    completed: completed.length,
+    pending: pending.length,
+    avg: avgGeneralRating(completed),
+  };
+}
+
+function fmtLesson(iso) {
+  try {
+    return format(parseISO(iso), 'dd/MM/yyyy · HH:mm');
+  } catch {
+    return format(new Date(iso), 'dd/MM/yyyy · HH:mm');
+  }
+}
+
+// Average maneuver ratings grouped by their parent type (FASE 1 / FASE 2 / …)
+// NB: maneuver_ratings.rating is text ('poor'|'fair'|'good'), mapped to 1/3/5.
+// `feedback` is a single object (lesson_feedback.lesson_id is UNIQUE → to-one).
+function tipologiaAverages(feedback) {
+  const ratings = feedback?.ratings || [];
+  const byType = {};
+  for (const r of ratings) {
+    const type = r.maneuver?.type;
+    const val = RATING_VALUE[r.rating];
+    if (!type || val == null) continue;
+    const key = type.name;
+    (byType[key] ||= { name: type.name, order: type.order_index ?? 99, sum: 0, count: 0 });
+    byType[key].sum += val;
+    byType[key].count += 1;
+  }
+  return Object.values(byType)
+    .map((g) => ({ name: g.name, order: g.order, avg: g.sum / g.count }))
+    .sort((a, b) => a.order - b.order);
+}
+
+export default function StudentsPage({ t }) {
   const { tenantId } = useAuthStore();
   const [students, setStudents] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [lessons, setLessons] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,8 +73,12 @@ export default function StudentsPage({ navigate, t, lang }) {
           setLoading(false);
           return;
         }
-        const data = await listUsers({ tenantId, role: 'student' });
-        setStudents(data || []);
+        const [studentData, lessonData] = await Promise.all([
+          listUsers({ tenantId, role: 'student' }),
+          listLessonsWithFeedback({ tenantId }),
+        ]);
+        setStudents(studentData || []);
+        setLessons(lessonData || []);
       } catch (error) {
         console.error('Failed to load students', error);
       } finally {
@@ -30,139 +87,220 @@ export default function StudentsPage({ navigate, t, lang }) {
     })();
   }, [tenantId]);
 
+  // lessons grouped by student id
+  const lessonsByStudent = useMemo(() => {
+    const map = {};
+    for (const l of lessons) {
+      (map[l.student_id] ||= []).push(l);
+    }
+    return map;
+  }, [lessons]);
+
+  const selected = students.find((s) => s.id === selectedId) || null;
+
   if (loading) {
     return (
       <Page>
-        <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Loading…
-        </div>
+        <div className="flex items-center justify-center py-12 text-sm text-muted">Loading…</div>
       </Page>
     );
   }
 
   return (
     <Page>
-      <PageHeader
-        title={t.students}
-        subtitle={t.studentsSub}
-        action={
-          <div className="flex flex-wrap gap-1">
-            <Pill active>{t.allStudents} ({students.length})</Pill>
-            <Pill>{t.myStudents} (8)</Pill>
-            <Pill>{t.examReady} (3)</Pill>
-          </div>
-        }
-      />
+      <PageHeader title={t.students} subtitle={t.studentsSub} />
+
+      {/* Student table — horizontally scrollable so columns are preserved on mobile */}
       <Card>
-        <TableHeader t={t} />
-        {students.map((s) => (
-          <StudentRow
-            key={s.id}
-            student={s}
-            t={t}
-            lang={lang}
-            onClick={() => setSelected(s)}
-            onLog={() => navigate('log')}
-          />
-        ))}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-muted">
+                <th className="px-4 py-2 font-medium">{t.student}</th>
+                <th className="px-4 py-2 font-medium">{t.totalLessons}</th>
+                <th className="px-4 py-2 font-medium">{t.completed}</th>
+                <th className="px-4 py-2 font-medium">{t.pending}</th>
+                <th className="px-4 py-2 font-medium">{t.progress}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted">No students found</td>
+                </tr>
+              ) : (
+                students.map((s) => {
+                  const stats = summarize(lessonsByStudent[s.id] || []);
+                  const isActive = selectedId === s.id;
+                  return (
+                    <tr
+                      key={s.id}
+                      onClick={() => setSelectedId(s.id)}
+                      className={`cursor-pointer border-b border-line last:border-0 transition hover:bg-[#fafafa] ${
+                        isActive ? 'bg-[#f0f6ff]' : ''
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{s.full_name}</div>
+                        <div className="mt-0.5 text-[11px] text-muted">{s.phone || '—'}</div>
+                      </td>
+                      <td className="px-4 py-3">{stats.total}</td>
+                      <td className="px-4 py-3 text-success">{stats.completed}</td>
+                      <td className="px-4 py-3 text-warn">{stats.pending}</td>
+                      <td className="px-4 py-3">
+                        {stats.avg == null ? (
+                          <span className="text-[11px] text-muted">—</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Stars value={Math.round(stats.avg)} readonly />
+                            <span className="text-[11px] text-muted">{stats.avg.toFixed(1)}</span>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
+
+      {/* Inline detail panel — appears below the list when a student is selected */}
       {selected && (
-        <DetailPanel student={selected} t={t} onClose={() => setSelected(null)} />
+        <StudentDetail
+          student={selected}
+          lessons={lessonsByStudent[selected.id] || []}
+          t={t}
+          onClose={() => setSelectedId(null)}
+        />
       )}
     </Page>
   );
 }
 
-function TableHeader({ t }) {
-  return (
-    <div className="hidden grid-cols-[2fr_1.2fr_1fr_1fr_80px] gap-3 border-b border-line px-4 py-2 text-[11px] uppercase tracking-wide text-muted lg:grid">
-      <span>{t.student}</span>
-      <span>{t.teacher}</span>
-      <span>{t.progress}</span>
-      <span>{t.status}</span>
-      <span>{t.actions}</span>
-    </div>
+function StudentDetail({ student, lessons, t, onClose }) {
+  // Logged lessons (completed / have feedback), most recent first
+  const logged = useMemo(
+    () => lessons
+      .filter((l) => l.status === 'completed' || l.feedback)
+      .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at)),
+    [lessons],
   );
-}
 
-function StudentRow({ student, t, lang, onClick, onLog }) {
-  const progress = Math.floor(Math.random() * 100);
-  const status = progress > 80 ? 'ready' : progress > 40 ? 'inProgress' : 'start';
-  const tone = status === 'ready' ? 'green' : status === 'inProgress' ? 'warn' : 'blue';
-  
-  return (
-    <button
-      className="grid w-full gap-3 border-b border-line px-4 py-3 text-left text-[13px] transition last:border-b-0 hover:bg-[#f5f5f5] lg:grid-cols-[2fr_1.2fr_1fr_1fr_80px] lg:items-center"
-      onClick={onClick}
-    >
-      <div>
-        <div className="font-medium">{student.full_name}</div>
-        <div className="mt-0.5 text-[11px] text-muted">
-          — · {Math.floor(Math.random() * 20) + 1} {t.lessons} · {t.last}: {lang === 'it' ? 'recente' : 'recent'}
-        </div>
-      </div>
-      <div className="text-xs text-muted">{student.phone || 'N/A'}</div>
-      <div className="flex items-center gap-2">
-        <ProgressBar percent={progress} tone={status === 'ready' ? 'good' : status === 'inProgress' ? 'warn' : ''} />
-        <span className="w-8 text-[11px] text-muted">{progress}%</span>
-      </div>
-      <Badge tone={tone}>{t[status]}</Badge>
-      <span
-        className="inline-flex w-fit items-center rounded-md border border-line bg-white px-2 py-1 text-xs hover:bg-[#f5f5f5]"
-        onClick={(e) => { e.stopPropagation(); onLog(); }}
-      >
-        {t.logAction}
-      </span>
-    </button>
-  );
-}
+  const [activeLessonId, setActiveLessonId] = useState(null);
+  const active = logged.find((l) => l.id === activeLessonId) || logged[0] || null;
 
-function DetailPanel({ student, t, onClose }) {
-  const mockManoeuvres = [['hillStart',3],['parallelParking',4],['uTurn',5],['overtaking',4],['motorway',3]];
-  
   return (
     <Card
       title={`${student.full_name} — ${t.profileDetail}`}
-      action={<IconButton label="Close" onClick={onClose}><X size={16} /></IconButton>}
+      action={
+        <button onClick={onClose} className="text-xs text-muted hover:text-ink">Close</button>
+      }
     >
-      <div className="grid gap-4 p-4 lg:grid-cols-2">
-        <section>
-          <SectionLabel>{t.manoeuvreEvaluation}</SectionLabel>
-          <div className="flex flex-col gap-2 text-xs">
-            {mockManoeuvres.map(([name, stars]) => (
-              <div key={name} className="flex items-center justify-between gap-3">
-                <span>{t[name]}</span>
-                <Stars value={stars} readonly />
-              </div>
-            ))}
+      <div className="flex flex-col md:flex-row">
+        {/* Left: scrollable lesson list */}
+        <aside className="w-full shrink-0 border-b border-line bg-[#fafafa] md:w-1/4 md:border-b-0 md:border-r lg:w-1/5">
+          <div className="px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-muted">
+            {t.lessons}
           </div>
-        </section>
-        <section>
-          <SectionLabel>{t.latestNotes}</SectionLabel>
-          <div className="py-1">
-            {[
-              { tone: 'good', title: 'cityGood',      meta: 'M. Rossi - 21 May',  tags: [['mirrorsOk','green'],['priorityOk','green']] },
-              { tone: 'warn', title: 'parkingImprove',meta: 'F. Marino - 18 May', tags: [['steeringWarn','warn']] },
-            ].map((note, i) => (
-              <div key={`${note.title}-${i}`} className="relative flex gap-3 pb-4 last:pb-0">
-                {i < 1 && (
-                  <div className="absolute left-[4px] top-3 h-[calc(100%-8px)] w-px bg-line" />
-                )}
-                <Dot tone={note.tone === 'good' ? 'green' : 'warn'} />
-                <div>
-                  <div className="text-[13px] font-medium">{t[note.title]}</div>
-                  <div className="mt-0.5 text-[11px] text-muted">{note.meta}</div>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {note.tags.map(([label, tone]) => (
-                      <Tag key={label} passive active tone={tone}>{t[label]}</Tag>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="max-h-[420px] overflow-y-auto">
+            {logged.length === 0 ? (
+              <div className="px-3 py-4 text-xs text-muted">{t.noLessonsLogged}</div>
+            ) : (
+              logged.map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => setActiveLessonId(l.id)}
+                  className={`block w-full border-l-2 px-3 py-2 text-left text-xs transition ${
+                    active?.id === l.id
+                      ? 'border-brand bg-white font-medium text-ink'
+                      : 'border-transparent text-muted hover:bg-white/60'
+                  }`}
+                >
+                  {fmtLesson(l.scheduled_at)}
+                </button>
+              ))
+            )}
           </div>
+        </aside>
+
+        {/* Right: feedback detail */}
+        <section className="min-w-0 flex-1 p-4">
+          {!active ? (
+            <div className="py-12 text-center text-sm text-muted">{t.selectLesson}</div>
+          ) : (
+            <LessonFeedback lesson={active} t={t} />
+          )}
         </section>
       </div>
     </Card>
+  );
+}
+
+function LessonFeedback({ lesson, t }) {
+  const feedback = lesson.feedback || null;
+
+  if (!feedback) {
+    return <div className="py-12 text-center text-sm text-muted">{t.noFeedback}</div>;
+  }
+
+  const ratingVal = RATING_VALUE[feedback.general_rating] ?? 0;
+  const tipologie = tipologiaAverages(lesson.feedback);
+
+  return (
+    <div className="space-y-5">
+      {/* General rating */}
+      <div>
+        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.generalRating}</div>
+        <div className="flex items-center gap-2">
+          <Stars value={ratingVal} readonly />
+          <span className="text-xs capitalize text-muted">{feedback.general_rating || '—'}</span>
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div>
+        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.instructorNotes}</div>
+        <div className="rounded-md border border-line bg-[#fafafa] p-3 text-sm">
+          {feedback.notes ? feedback.notes : <span className="text-muted">—</span>}
+        </div>
+      </div>
+
+      {/* Tipologia */}
+      <div>
+        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.tipologia}</div>
+        <div className="space-y-1.5">
+          {tipologie.length === 0 ? (
+            <div className="text-sm text-muted">—</div>
+          ) : (
+            tipologie.map((g) => (
+              <div key={g.name} className="flex items-center justify-between gap-3 text-sm">
+                <span>{g.name}</span>
+                <div className="flex items-center gap-2">
+                  <Stars value={Math.round(g.avg)} readonly />
+                  <span className="w-7 text-[11px] text-muted">{g.avg.toFixed(1)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Autostrada */}
+      <div>
+        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.autostradaSection}</div>
+        <div className="flex flex-wrap gap-6 text-sm">
+          <div>
+            <span className="text-muted">{t.fromLabel}: </span>
+            <span className="font-medium">{feedback.from_highway?.name || '—'}</span>
+          </div>
+          <div>
+            <span className="text-muted">{t.toLabel}: </span>
+            <span className="font-medium">{feedback.to_highway?.name || '—'}</span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Bell, Car, CalendarDays, ClipboardList, Clock,
+  Bell, Car, CalendarDays, CalendarCheck, ClipboardList, Clock,
   LayoutDashboard, Plus, Route, Search, Settings,
   Shuffle, UserPlus, Users, LogOut, User, TrendingUp, Menu, X,
 } from 'lucide-react';
@@ -68,6 +68,7 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
   const iconMap = {
     LayoutDashboard,
     CalendarDays,
+    CalendarCheck,
     Clock,
     Users,
     UserPlus,

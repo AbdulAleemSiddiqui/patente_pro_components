@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { Save, X } from 'lucide-react';
 import {
-  Badge, Button, Card, Field, fieldClass,
+  Button, Card, Field, fieldClass,
   Page, PageHeader, Tag, TwoColumnGrid,
 } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
-import { listRouteTypesForTenant, listManeuvers, listErrorTags } from '../lib/api.js';
+import {
+  listManeuvers, listErrorTags,
+  listHighways, createHighway, deleteHighway,
+} from '../lib/api.js';
 
 export default function SettingsPage({ showToast, t }) {
   const { tenantId } = useAuthStore();
-  const [routeTypes, setRouteTypes] = useState([]);
   const [maneuvers, setManeuvers] = useState([]);
   const [errorTags, setErrorTags] = useState([]);
+  const [highways, setHighways] = useState([]);
+  const [newHighway, setNewHighway] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,15 +26,15 @@ export default function SettingsPage({ showToast, t }) {
           return;
         }
 
-        const [routeData, maneuverData, errorData] = await Promise.all([
-          listRouteTypesForTenant({ tenantId }),
+        const [maneuverData, errorData, highwayData] = await Promise.all([
           listManeuvers({ tenantId }),
           listErrorTags({ tenantId }),
+          listHighways({ tenantId }),
         ]);
 
-        setRouteTypes(routeData || []);
         setManeuvers(maneuverData || []);
         setErrorTags(errorData || []);
+        setHighways(highwayData || []);
       } catch (error) {
         console.error('Failed to load settings data', error);
       } finally {
@@ -38,6 +42,40 @@ export default function SettingsPage({ showToast, t }) {
       }
     })();
   }, [tenantId]);
+
+  const refreshHighways = async () => {
+    try {
+      const data = await listHighways({ tenantId });
+      setHighways(data || []);
+    } catch (error) {
+      console.error('Failed to reload highways', error);
+    }
+  };
+
+  const handleAddHighway = async () => {
+    const name = newHighway.trim();
+    if (!name) return;
+    try {
+      await createHighway({ tenantId, name });
+      setNewHighway('');
+      await refreshHighways();
+      showToast(`${t.highways}: ${name} ✓`);
+    } catch (error) {
+      console.error('Failed to add highway', error);
+      showToast('Failed to add highway', 'error');
+    }
+  };
+
+  const handleDeleteHighway = async (id) => {
+    try {
+      await deleteHighway({ id });
+      await refreshHighways();
+      showToast(`${t.highways} ✓`);
+    } catch (error) {
+      console.error('Failed to delete highway', error);
+      showToast('Failed to delete highway', 'error');
+    }
+  };
 
   if (loading) {
     return (
@@ -92,25 +130,43 @@ export default function SettingsPage({ showToast, t }) {
           </div>
         </Card>
 
-        <Card title={t.routeConfiguration}>
-          <div className="divide-y divide-line">
-            {routeTypes.map((route) => (
-              <div key={route.id} className="px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-[13px] font-medium">{route.name}</div>
-                  <Badge tone={route.route_sub_types?.length ? 'warn' : 'green'}>
-                    {route.route_sub_types?.length ? t.requiresSubSelection : t.noSubSelection}
-                  </Badge>
-                </div>
-                {route.route_sub_types?.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {route.route_sub_types.map((sub) => (
-                      <Tag key={sub.id} passive active>{sub.label}</Tag>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+        <Card title={t.highways}>
+          <div className="p-4">
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {highways.length === 0 ? (
+                <span className="text-sm text-muted">—</span>
+              ) : (
+                highways.map((hw) => (
+                  <span
+                    key={hw.id}
+                    className="inline-flex items-center gap-1 rounded-full border border-brand-mid bg-brand-light px-2.5 py-1 text-xs text-brand-mid"
+                  >
+                    {hw.name}
+                    <button
+                      type="button"
+                      className="ml-0.5 inline-flex items-center justify-center rounded-full hover:text-accent"
+                      title="Remove"
+                      onClick={() => handleDeleteHighway(hw.id)}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                className={fieldClass}
+                placeholder={t.addHighwayPlaceholder}
+                value={newHighway}
+                onChange={(e) => setNewHighway(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddHighway(); }}
+              />
+              <Button primary onClick={handleAddHighway}>
+                <span>+</span>
+                {t.addHighway}
+              </Button>
+            </div>
           </div>
         </Card>
       </TwoColumnGrid>

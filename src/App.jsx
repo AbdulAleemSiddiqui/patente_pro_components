@@ -6,7 +6,7 @@ import LessonLogPage    from './pages/LessonLogPage.jsx';
 import SettingsPage     from './pages/SettingsPage.jsx';
 import UsersPage        from './pages/UsersPage.jsx';
 import SchedulePage     from './pages/SchedulePage.jsx';
-import SwapPage         from './pages/SwapPage.jsx';
+import LessonsAdminPage from './pages/LessonsAdminPage.jsx';
 import ProfilePage      from './pages/ProfilePage.jsx';
 import StudentProgressPage from './pages/StudentProgressPage.jsx';
 
@@ -16,7 +16,9 @@ const COPY = {
     main: 'Main', admin: 'Admin', tools: 'Tools', instructor: 'Students', student: 'Student',
     dashboard: 'Dashboard', students: 'Progress', log: 'Log lesson',
     settings: 'Settings', users: 'Users', availabilityAdmin: 'Availability',
-    schedule: 'Schedule', manoeuvres: 'Manoeuvres', swap: 'Slot swap',
+    schedule: 'Schedule', manoeuvres: 'Manoeuvres',
+    highways: 'Highways', highway: 'Autostrada', toLabel: 'To', fromLabel: 'From',
+    addHighway: 'Add', addHighwayPlaceholder: 'New highway name...',
     search: 'Search student...', newLesson: 'New lesson',
     notificationsNone: 'Notifications: no updates',
     databaseConnected: 'DB connected', databaseMock: 'Mock data',
@@ -24,7 +26,6 @@ const COPY = {
     activeStudents: 'Active students', activeStudentsTrend: '+2 this month',
     lessonsToday: 'Lessons today', completedTwo: '2 completed',
     readyForExam: 'Ready for exam', readyTrend: 'up from 1',
-    swapRequests: 'Swap requests', pending: 'Pending',
     recentStudents: 'Recent students', all: 'All',
     allStudents: 'All students', myStudents: 'Mine', examReady: 'Exam ready',
     name: 'Name', student: 'Student', teacher: 'Instructor',
@@ -37,6 +38,10 @@ const COPY = {
     safeOvertaking: 'Safe overtaking', upcomingLessons: 'Upcoming lessons today',
     completed: 'Completed', now: 'Now', inTwoHours: 'In 2 hours', scheduled: 'Scheduled',
     studentsSub: 'Full profile and lesson history for each student',
+    totalLessons: 'Total', pending: 'Pending',
+    tipologia: 'TIPOLOGIA', autostradaSection: 'AUTOSTRADA',
+    noFeedback: 'No feedback recorded for this lesson',
+    selectLesson: 'Select a lesson', noLessonsLogged: 'No logged lessons yet',
     profileDetail: 'Detailed profile', manoeuvreEvaluation: 'Manoeuvre evaluation',
     latestNotes: 'Latest instructor notes',
     hillStart: 'Hill start', overtaking: 'Overtaking', motorway: 'Motorway driving',
@@ -78,6 +83,12 @@ const COPY = {
     setAvailability: 'Set availability', availabilitySaved: 'Availability saved',
     lessonSchedule: 'Lesson schedule',
     lessonScheduleSub: 'Create lessons and review the calendar by teacher or student',
+    lessonsAdmin: 'Lessons',
+    lessonsAdminTitle: 'Lessons & Availability',
+    lessonsAdminSub: 'Manage scheduled lessons and teacher availability',
+    tabLessons: 'Lessons', tabAvailability: 'Availability',
+    addLesson: 'Add lesson', addAvailability: 'Add availability',
+    noLessonsAdmin: 'No lessons yet', noAvailabilityAdmin: 'No availability blocks yet',
     newScheduledLesson: 'New scheduled lesson',
     teacherView: 'By teacher', studentView: 'By student',
     pickTeacher: 'Pick teacher', pickStudent: 'Pick student',
@@ -105,16 +116,7 @@ const COPY = {
     roundabout: 'Cross a roundabout', systematicMirrors: 'Systematic mirror use',
     signalIndicators: 'Signal with indicators', respectPriority: 'Respect right of way',
     laneKeeping: 'Lane keeping',
-    swapTitle: 'Instructor slot swap',
-    swapSub: 'Request or accept lesson swaps with colleagues',
-    newSwap: 'New request', incomingRequests: 'Incoming requests', oneNew: '1 new',
-    reason: 'Reason', medicalVisit: 'medical visit',
-    accept: 'Accept', reject: 'Reject',
-    accepted: 'Swap accepted', rejected: 'Swap rejected', newSwapSent: 'Swap request sent',
-    availability: 'Instructor availability', contact: 'Contact', contactSent: 'Request sent',
-    swapHistory: 'Swap history',
-    freeMonWed: 'Free: Mon–Wed morning', freeThu: 'Free: Thursday afternoon',
-    partlyAvailable: 'Partially available', completedStatus: 'Completed', language: 'Language',
+    completedStatus: 'Completed', language: 'Language',
     profile: 'Profile',
     progress: 'My Progress',
     progressTitle: 'My Learning Progress',
@@ -133,7 +135,9 @@ const COPY = {
     main: 'Principale', admin: 'Admin', tools: 'Strumenti', instructor: 'Istruttore', student: 'Studente',
     dashboard: 'Dashboard', students: 'Studenti', log: 'Registra lezione',
     settings: 'Impostazioni', users: 'Utenti', availabilityAdmin: 'Disponibilità',
-    schedule: 'Calendario', manoeuvres: 'Manovre', swap: 'Scambio slot',
+    schedule: 'Calendario', manoeuvres: 'Manovre',
+    highways: 'Autostrade', highway: 'Autostrada', toLabel: 'A', fromLabel: 'Da',
+    addHighway: 'Aggiungi', addHighwayPlaceholder: 'Nome nuova autostrada...',
     search: 'Cerca studente...', newLesson: 'Nuova lezione',
     notificationsNone: 'Notifiche: nessun aggiornamento',
     databaseConnected: 'DB connesso', databaseMock: 'Dati mock',
@@ -141,7 +145,6 @@ const COPY = {
     activeStudents: 'Studenti attivi', activeStudentsTrend: '+2 questo mese',
     lessonsToday: 'Lezioni oggi', completedTwo: '2 completate',
     readyForExam: 'Pronto per esame', readyTrend: 'da 1',
-    swapRequests: 'Swap richiesti', pending: 'In attesa',
     recentStudents: 'Studenti recenti', all: 'Tutti',
     allStudents: 'Tutti gli studenti', myStudents: 'Miei', examReady: 'Pronto esame',
     name: 'Nome', student: 'Studente', teacher: 'Istruttore',
@@ -154,6 +157,10 @@ const COPY = {
     safeOvertaking: 'Sorpasso sicuro', upcomingLessons: 'Prossime lezioni oggi',
     completed: 'Completata', now: 'Adesso', inTwoHours: 'Tra 2 ore', scheduled: 'Programmata',
     studentsSub: 'Profilo completo e storico lezioni di ogni studente',
+    totalLessons: 'Totale', pending: 'In sospeso',
+    tipologia: 'TIPOLOGIA', autostradaSection: 'AUTOSTRADA',
+    noFeedback: 'Nessun feedback registrato per questa lezione',
+    selectLesson: 'Seleziona una lezione', noLessonsLogged: 'Nessuna lezione registrata',
     profileDetail: 'Profilo dettagliato', manoeuvreEvaluation: 'Valutazione manovre',
     latestNotes: 'Ultime note istruttori',
     hillStart: 'Partenza in salita', overtaking: 'Sorpasso', motorway: 'Guida in autostrada',
@@ -194,6 +201,12 @@ const COPY = {
     setAvailability: 'Imposta disponibilità', availabilitySaved: 'Disponibilità salvata',
     lessonSchedule: 'Calendario lezioni',
     lessonScheduleSub: 'Crea lezioni e consulta il calendario per istruttore o studente',
+    lessonsAdmin: 'Lezioni',
+    lessonsAdminTitle: 'Lezioni e Disponibilità',
+    lessonsAdminSub: 'Gestisci lezioni programmate e disponibilità insegnanti',
+    tabLessons: 'Lezioni', tabAvailability: 'Disponibilità',
+    addLesson: 'Aggiungi lezione', addAvailability: 'Aggiungi disponibilità',
+    noLessonsAdmin: 'Nessuna lezione', noAvailabilityAdmin: 'Nessuna disponibilità',
     newScheduledLesson: 'Nuova lezione programmata',
     teacherView: 'Per istruttore', studentView: 'Per studente',
     pickTeacher: 'Seleziona istruttore', pickStudent: 'Seleziona studente',
@@ -220,16 +233,7 @@ const COPY = {
     roundabout: 'Attraversamento di rotatoria', systematicMirrors: 'Uso sistematico degli specchietti',
     signalIndicators: 'Segnalazione con le frecce', respectPriority: 'Rispetto della precedenza',
     laneKeeping: 'Mantenimento corsia',
-    swapTitle: 'Scambio slot istruttori',
-    swapSub: 'Richiedi o accetta scambi di lezione tra colleghi',
-    newSwap: 'Nuova richiesta', incomingRequests: 'Richieste in arrivo', oneNew: '1 nuova',
-    reason: 'Motivo', medicalVisit: 'visita medica',
-    accept: 'Accetta', reject: 'Rifiuta',
-    accepted: 'Swap accettato', rejected: 'Swap rifiutato', newSwapSent: 'Richiesta di swap inviata',
-    availability: 'Disponibilità istruttori', contact: 'Contatta', contactSent: 'Richiesta inviata',
-    swapHistory: 'Storico swap',
-    freeMonWed: 'Libera: lun–mer mattina', freeThu: 'Libero: giovedì pomeriggio',
-    partlyAvailable: 'Parzialmente disponibile', completedStatus: 'Completato', language: 'Lingua',
+    completedStatus: 'Completato', language: 'Lingua',
     profile: 'Profilo',
     progress: 'I miei Progressi',
     progressTitle: 'I miei progressi',
@@ -268,11 +272,11 @@ export default function App() {
       {page === 'settings'           && <SettingsPage     {...pageProps} />}
       {page === 'users'              && <UsersPage        {...pageProps} />}
       {page === 'schedule'           && <SchedulePage     {...pageProps} />}
-      {page === 'swap'               && <SwapPage         {...pageProps} />}
+      {page === 'lessonsAdmin'       && <LessonsAdminPage {...pageProps} />}
       {page === 'profile'            && <ProfilePage      {...pageProps} />}
       {page === 'progress'           && <StudentProgressPage {...pageProps} />}
       {page === 'student_progress'    && <StudentProgressPage {...pageProps} />}
-      {!['students','log','settings','users','schedule','swap','profile','progress','student_progress'].includes(page) && (
+      {!['students','log','settings','users','schedule','lessonsAdmin','profile','progress','student_progress'].includes(page) && (
         <DashboardPage {...pageProps} />
       )}
     </Layout>

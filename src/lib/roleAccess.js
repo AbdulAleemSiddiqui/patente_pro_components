@@ -8,15 +8,16 @@ export const NAV_ITEMS = [
   // Main section - core functionality
   { section: 'main',  page: 'dashboard',        icon: 'LayoutDashboard', label: 'Dashboard' },
   { section: 'main',  page: 'schedule',         icon: 'CalendarDays',      label: 'Calendar' },
+  { section: 'main',  page: 'log',              icon: 'ClipboardList',     label: 'Log lesson' },
 
   // Admin section - only admins see these
   { section: 'admin', page: 'users',            icon: 'UserPlus',           label: 'Users' },
+  { section: 'admin', page: 'lessonsAdmin',     icon: 'CalendarCheck',      label: 'Lessons' },
 
   // Student section - both admins and teachers see this
   { section: 'student', page: 'students',        icon: 'TrendingUp',         label: 'Progress' },
 
   // Tools section - available to appropriate roles
-  { section: 'tools', page: 'swap',            icon: 'Shuffle',            label: 'Slot swap' },
   { section: 'tools', page: 'settings',         icon: 'Settings',           label: 'Settings', comingSoon: true },
 
   // Profile section - all users see this
@@ -30,9 +31,10 @@ export const ROLE_ACCESS = {
   admin: [
     'dashboard',
     'schedule',
+    'log',
     'students',
     'users',
-    'swap',
+    'lessonsAdmin',
     'settings',
     'profile',
   ],
@@ -40,9 +42,8 @@ export const ROLE_ACCESS = {
   teacher: [
     'dashboard',
     'schedule',
+    'log',
     'students',       // Same students page as admin (with student data)
-    'log',            // Accessed via calendar, not shown in menu
-    'swap',
     'profile',
   ],
 

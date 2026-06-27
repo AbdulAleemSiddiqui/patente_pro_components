@@ -69,11 +69,10 @@ export default function DashboardPage({ navigate, t }) {
     <Page>
       <PageHeader title={t.overview} subtitle={t.overviewSub} />
 
-      <div className="mb-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard label={t.activeStudents} value={String(students.length)} badge={t.activeStudentsTrend} tone="green" />
         <MetricCard label={t.lessonsToday}   value={String(lessons.filter(l => l.status === 'completed').length)}  badge={t.completedTwo}        tone="blue"  />
         <MetricCard label={t.readyForExam}   value="3"  badge={t.readyTrend}          tone="green" />
-        <MetricCard label={t.swapRequests}   value="1"  badge={t.pending}             tone="warn"  />
       </div>
 
       <TwoColumnGrid>

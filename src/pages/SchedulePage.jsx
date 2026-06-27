@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Calendar, dateFnsLocalizer, Views, momentLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS, it } from 'date-fns/locale';
@@ -18,6 +18,18 @@ const localizer = dateFnsLocalizer({
     it,
   },
 });
+
+// Per-student lesson colors. Assigned by sorted student order (not id-hash) so
+// every student gets a distinct color as long as there are fewer than the palette size.
+const LESSON_COLORS = [
+  'bg-blue-500 text-white',
+  'bg-green-500 text-white',
+  'bg-purple-500 text-white',
+  'bg-orange-500 text-white',
+  'bg-pink-500 text-white',
+  'bg-teal-500 text-white',
+  'bg-indigo-500 text-white',
+];
 
 export default function SchedulePage({ showToast, t, lang, navigate }) {
   const { tenantId, role, session } = useAuthStore();
@@ -53,6 +65,17 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
   const isAdmin = role === 'admin';
   const currentUserId = session?.user?.id;
+
+  // Map each student to a distinct color by sorted name order (avoids id-hash collisions)
+  const studentColorMap = useMemo(() => {
+    const map = {};
+    [...students]
+      .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+      .forEach((s, i) => {
+        map[s.id] = LESSON_COLORS[i % LESSON_COLORS.length];
+      });
+    return map;
+  }, [students]);
 
   useEffect(() => {
     loadScheduleData();
@@ -244,7 +267,12 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
     // For lessons, check if teacher is clicking to give feedback
     if (role === 'teacher' && event.resource.teacher_id === currentUserId) {
-      // Only allow feedback for completed or scheduled lessons (not cancelled)
+      // Completed lessons already have feedback logged — block re-submitting
+      if (event.resource.status === 'completed') {
+        showToast('Feedback already submitted for this lesson');
+        return;
+      }
+      // Allow feedback for scheduled lessons (not cancelled)
       if (event.resource.status !== 'cancelled') {
         setLessonForFeedback(event);
         setShowFeedbackModal(true);
@@ -590,6 +618,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
   // Custom event component
   const EventComponent = ({ event }) => {
     const isAvailability = event.resource?.type === 'availability';
+    const isCompleted = event.resource?.type === 'lesson' && event.resource?.status === 'completed';
     const student = event.student;
     const teacher = event.teacher;
 
@@ -608,32 +637,46 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
       .substring(0, 2) || 'T';
 
     // Lighter colors for availability (using -200 instead of -500)
-    const colors = isAvailability
-      ? [
-          'bg-blue-200 text-blue-800',
-          'bg-green-200 text-green-800',
-          'bg-purple-200 text-purple-800',
-          'bg-orange-200 text-orange-800',
-          'bg-pink-200 text-pink-800',
-          'bg-teal-200 text-teal-800',
-          'bg-indigo-200 text-indigo-800',
-        ]
-      : [
-          'bg-blue-500 text-white',
-          'bg-green-500 text-white',
-          'bg-purple-500 text-white',
-          'bg-orange-500 text-white',
-          'bg-pink-500 text-white',
-          'bg-teal-500 text-white',
-          'bg-indigo-500 text-white',
-        ];
+    const availabilityColors = [
+      'bg-blue-200 text-blue-800',
+      'bg-green-200 text-green-800',
+      'bg-purple-200 text-purple-800',
+      'bg-orange-200 text-orange-800',
+      'bg-pink-200 text-pink-800',
+      'bg-teal-200 text-teal-800',
+      'bg-indigo-200 text-indigo-800',
+    ];
 
-    const colorIndex = (student?.id || teacher?.id)
-      ? (student?.id || teacher?.id).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
+    // Lesson color comes from the per-student map (distinct per student); availability
+    // falls back to a teacher-id hash over its lighter palette.
+    const lessonColor = studentColorMap[student?.id] || LESSON_COLORS[0];
+    const availabilityColorIndex = teacher?.id
+      ? teacher.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % availabilityColors.length
       : 0;
+    const eventColor = isAvailability ? availabilityColors[availabilityColorIndex] : lessonColor;
+
+    // Completed (already logged) lessons: gray in week/day, original per-student color in month.
+    // Strikethrough applies in every view.
+    if (isCompleted) {
+      const completedContainer = view === 'month'
+        ? lessonColor
+        : 'bg-gray-300 text-gray-600 opacity-70';
+      return (
+        <div className={`h-full rounded ${completedContainer} p-1.5 text-xs overflow-hidden`}>
+          <div className="truncate font-medium line-through">
+            {student?.full_name?.split(' ')[0] || 'Student'}
+          </div>
+          {view !== 'month' && (
+            <div className="truncate text-[10px] opacity-90">
+              {teacher?.full_name?.split(' ')[0] || ''}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
-      <div className={`h-full rounded ${colors[colorIndex]} p-1.5 text-xs overflow-hidden ${isAvailability ? 'opacity-80 border-l-2 border-current' : ''}`}>
+      <div className={`h-full rounded ${eventColor} p-1.5 text-xs overflow-hidden ${isAvailability ? 'opacity-80 border-l-2 border-current' : ''}`}>
         <div className="truncate opacity-90 font-medium">
           {isAvailability ? (teacher?.full_name?.split(' ')[0] || 'Available') : (student?.full_name?.split(' ')[0] || 'Student')}
         </div>
@@ -676,20 +719,8 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
   };
 
   // Choose color based on first event of the day (matches EventComponent logic)
-  const colors = [
-    'bg-blue-500 text-white',
-    'bg-green-500 text-white',
-    'bg-purple-500 text-white',
-    'bg-orange-500 text-white',
-    'bg-pink-500 text-white',
-    'bg-teal-500 text-white',
-    'bg-indigo-500 text-white',
-  ];
-
   const firstEvent = dayLessons[0];
-  const colorIndex = firstEvent && firstEvent.student && firstEvent.student.id
-    ? firstEvent.student.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
-    : 0;
+  const badgeColor = (firstEvent?.student?.id && studentColorMap[firstEvent.student.id]) || LESSON_COLORS[0];
 
   return (
     <div
@@ -704,7 +735,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
       </div>
       {dayLessonCount > 0 && (
         <div className={`mt-0.5`}>
-          <div className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors[colorIndex]}`}>
+          <div className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeColor}`}>
             {dayLessonCount} {dayLessonCount === 1 ? (t.lesson || 'Lesson') : (t.lessons || 'Lessons')}
           </div>
         </div>
@@ -718,7 +749,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
       )}
     </div>
   );
-}, [filteredEvents, setDate, setView, t]);
+}, [filteredEvents, setDate, setView, t, studentColorMap]);
 
   // Custom toolbar component
   const CustomToolbar = ({ label, onNavigate, onView }) => {
@@ -888,22 +919,11 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                 .toUpperCase()
                 .substring(0, 2) || 'S';
 
-              const colors = [
-                'bg-blue-500',
-                'bg-green-500',
-                'bg-purple-500',
-                'bg-orange-500',
-                'bg-pink-500',
-                'bg-teal-500',
-                'bg-indigo-500',
-              ];
-              const colorIndex = student.id
-                ? student.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
-                : 0;
+              const swatchColor = studentColorMap[student.id] || LESSON_COLORS[0];
 
               return (
                 <div key={student.id} className="flex items-center gap-2 text-xs">
-                  <div className={`w-7 h-7 rounded flex items-center justify-center text-white font-medium ${colors[colorIndex]}`}>
+                  <div className={`w-7 h-7 rounded flex items-center justify-center text-white font-medium ${swatchColor}`}>
                     {initials}
                   </div>
                   <span className="text-muted">{student.full_name}</span>
@@ -1153,17 +1173,23 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                 // Editing mode - show editable date/time for admins
                 isAdmin ? (
                   <>
+                    {selectedEvent?.resource?.status === 'completed' && (
+                      <div className="text-xs text-muted bg-gray-50 border border-line rounded-md p-2">
+                        This lesson is already logged — timing can no longer be changed.
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs text-muted mb-1">Start Date & Time *</label>
                       <input
                         type="datetime-local"
-                        className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
+                        className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid disabled:bg-gray-100 disabled:text-muted disabled:cursor-not-allowed"
                         value={lessonData.startAt}
                         onChange={(e) => {
                           const newValue = e.target.value;
                           if (newValue === '') return;
                           setLessonData({ ...lessonData, startAt: newValue });
                         }}
+                        disabled={selectedEvent?.resource?.status === 'completed'}
                         required
                         autoComplete="off"
                       />
@@ -1171,9 +1197,10 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                     <div>
                       <label className="block text-xs text-muted mb-1">Duration *</label>
                       <select
-                        className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
+                        className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid disabled:bg-gray-100 disabled:text-muted disabled:cursor-not-allowed"
                         value={lessonData.duration_minutes}
                         onChange={(e) => setLessonData({ ...lessonData, duration_minutes: parseInt(e.target.value) })}
+                        disabled={selectedEvent?.resource?.status === 'completed'}
                       >
                         {[30, 45, 50, 60, 90, 120].map((duration) => (
                           <option key={duration} value={duration}>
