@@ -18,7 +18,7 @@ export const NAV_ITEMS = [
   { section: 'student', page: 'students',        icon: 'TrendingUp',         label: 'Progress' },
 
   // Tools section - available to appropriate roles
-  { section: 'tools', page: 'settings',         icon: 'Settings',           label: 'Settings', comingSoon: true },
+  { section: 'tools', page: 'settings',         icon: 'Settings',           label: 'Settings' },
 
   // Profile section - all users see this
   { section: 'profile', page: 'profile',        icon: 'User',               label: 'Profile' },
