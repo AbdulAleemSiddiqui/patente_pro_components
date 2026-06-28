@@ -121,10 +121,10 @@ export function ProgressBar({ percent, color, tone }) {
   );
 }
 
-export function Stars({ value, onChange, readonly }) {
+export function Stars({ value, onChange, readonly, max = 5 }) {
   return (
     <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((star) => (
+      {Array.from({ length: max }, (_, i) => i + 1).map((star) => (
         <button
           key={star}
           className={`text-base leading-none ${star <= value ? 'text-[#e6a817]' : 'text-line'} ${
@@ -137,6 +137,36 @@ export function Stars({ value, onChange, readonly }) {
           ★
         </button>
       ))}
+    </div>
+  );
+}
+
+// Read-only traffic-light rating (poor / fair / good) — same styling as the Log page.
+const SIGNAL_COLORS = {
+  poor: { on: 'bg-red-500', glow: '0 0 8px rgba(239, 68, 68, 0.6), 0 0 4px rgba(239, 68, 68, 0.4)' },
+  fair: { on: 'bg-[#d4820a]', glow: '0 0 8px rgba(212, 130, 10, 0.6), 0 0 4px rgba(212, 130, 10, 0.4)' },
+  good: { on: 'bg-green-500', glow: '0 0 8px rgba(34, 197, 94, 0.6), 0 0 4px rgba(34, 197, 94, 0.4)' },
+};
+
+export function SignalLights({ value, size = 24 }) {
+  return (
+    <div className="traffic-light flex gap-2">
+      {['poor', 'fair', 'good'].map((rating) => {
+        const active = value === rating;
+        const c = SIGNAL_COLORS[rating];
+        return (
+          <span
+            key={rating}
+            className={`tl-circle rounded-full transition ${active ? c.on : 'bg-gray-200'}`}
+            style={{
+              width: size,
+              height: size,
+              boxShadow: active ? c.glow : '0 0 4px rgba(0, 0, 0, 0.1)',
+            }}
+            title={rating.charAt(0).toUpperCase() + rating.slice(1)}
+          />
+        );
+      })}
     </div>
   );
 }

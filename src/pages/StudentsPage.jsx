@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import {
-  Card, Page, PageHeader, Stars,
+  Card, Page, PageHeader, ProgressBar, SignalLights,
 } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
 import { listUsers, listLessonsWithFeedback } from '../lib/api.js';
 
-// Map general_rating (poor/fair/good) onto a 1–5 star scale for display/averaging
-const RATING_VALUE = { poor: 1, fair: 3, good: 5 };
+// Map general_rating (poor/fair/good) onto a 1–3 scale for averaging
+const RATING_VALUE = { poor: 1, fair: 2, good: 3 };
+// Inverse: a numeric average back to a signal-light rating
+const VALUE_TO_RATING = { 1: 'poor', 2: 'fair', 3: 'good' };
 
 function avgGeneralRating(lessons) {
   const vals = lessons
@@ -23,11 +25,15 @@ function summarize(lessons) {
   const active = lessons.filter((l) => l.status !== 'cancelled');
   const completed = active.filter((l) => l.status === 'completed');
   const pending = active.filter((l) => l.status === 'scheduled');
+  const avg = avgGeneralRating(completed);
+  // Map the 1–3 rating average onto a 0–100 progress percentage
+  const percent = avg == null ? null : Math.round(((avg - 1) / 2) * 100);
   return {
     total: active.length,
     completed: completed.length,
     pending: pending.length,
-    avg: avgGeneralRating(completed),
+    avg,
+    percent,
   };
 }
 
@@ -110,12 +116,12 @@ export default function StudentsPage({ t }) {
     <Page>
       <PageHeader title={t.students} subtitle={t.studentsSub} />
 
-      {/* Student table — horizontally scrollable so columns are preserved on mobile */}
+      {/* Student table — capped at ~4 rows (scroll for more); horizontal scroll on mobile */}
       <Card>
-        <div className="overflow-x-auto">
+        <div className="max-h-[300px] overflow-auto">
           <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-muted">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-line bg-white text-left text-[11px] uppercase tracking-wide text-muted">
                 <th className="px-4 py-2 font-medium">{t.student}</th>
                 <th className="px-4 py-2 font-medium">{t.totalLessons}</th>
                 <th className="px-4 py-2 font-medium">{t.completed}</th>
@@ -148,12 +154,15 @@ export default function StudentsPage({ t }) {
                       <td className="px-4 py-3 text-success">{stats.completed}</td>
                       <td className="px-4 py-3 text-warn">{stats.pending}</td>
                       <td className="px-4 py-3">
-                        {stats.avg == null ? (
+                        {stats.percent == null ? (
                           <span className="text-[11px] text-muted">—</span>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <Stars value={Math.round(stats.avg)} readonly />
-                            <span className="text-[11px] text-muted">{stats.avg.toFixed(1)}</span>
+                            <ProgressBar
+                              percent={stats.percent}
+                              tone={stats.percent >= 67 ? 'good' : stats.percent >= 34 ? 'warn' : ''}
+                            />
+                            <span className="w-9 text-[11px] text-muted">{stats.percent}%</span>
                           </div>
                         )}
                       </td>
@@ -204,7 +213,8 @@ function StudentDetail({ student, lessons, t, onClose }) {
           <div className="px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-muted">
             {t.lessons}
           </div>
-          <div className="max-h-[420px] overflow-y-auto">
+          {/* Show ~3 lessons, then scroll */}
+          <div className="max-h-[108px] overflow-y-auto">
             {logged.length === 0 ? (
               <div className="px-3 py-4 text-xs text-muted">{t.noLessonsLogged}</div>
             ) : (
@@ -212,7 +222,7 @@ function StudentDetail({ student, lessons, t, onClose }) {
                 <button
                   key={l.id}
                   onClick={() => setActiveLessonId(l.id)}
-                  className={`block w-full border-l-2 px-3 py-2 text-left text-xs transition ${
+                  className={`flex h-9 w-full items-center border-l-2 px-3 text-left text-xs transition ${
                     active?.id === l.id
                       ? 'border-brand bg-white font-medium text-ink'
                       : 'border-transparent text-muted hover:bg-white/60'
@@ -245,7 +255,6 @@ function LessonFeedback({ lesson, t }) {
     return <div className="py-12 text-center text-sm text-muted">{t.noFeedback}</div>;
   }
 
-  const ratingVal = RATING_VALUE[feedback.general_rating] ?? 0;
   const tipologie = tipologiaAverages(lesson.feedback);
 
   return (
@@ -254,7 +263,7 @@ function LessonFeedback({ lesson, t }) {
       <div>
         <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.generalRating}</div>
         <div className="flex items-center gap-2">
-          <Stars value={ratingVal} readonly />
+          <SignalLights value={feedback.general_rating} />
           <span className="text-xs capitalize text-muted">{feedback.general_rating || '—'}</span>
         </div>
       </div>
@@ -278,7 +287,7 @@ function LessonFeedback({ lesson, t }) {
               <div key={g.name} className="flex items-center justify-between gap-3 text-sm">
                 <span>{g.name}</span>
                 <div className="flex items-center gap-2">
-                  <Stars value={Math.round(g.avg)} readonly />
+                  <SignalLights value={VALUE_TO_RATING[Math.round(g.avg)] || 'fair'} />
                   <span className="w-7 text-[11px] text-muted">{g.avg.toFixed(1)}</span>
                 </div>
               </div>

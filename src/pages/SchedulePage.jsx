@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Calendar, dateFnsLocalizer, Views, momentLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS, it } from 'date-fns/locale';
@@ -19,17 +19,8 @@ const localizer = dateFnsLocalizer({
   },
 });
 
-// Per-student lesson colors. Assigned by sorted student order (not id-hash) so
-// every student gets a distinct color as long as there are fewer than the palette size.
-const LESSON_COLORS = [
-  'bg-blue-500 text-white',
-  'bg-green-500 text-white',
-  'bg-purple-500 text-white',
-  'bg-orange-500 text-white',
-  'bg-pink-500 text-white',
-  'bg-teal-500 text-white',
-  'bg-indigo-500 text-white',
-];
+// One consistent color for all lessons (all students).
+const LESSON_COLOR = 'bg-blue-500 text-white';
 
 export default function SchedulePage({ showToast, t, lang, navigate }) {
   const { tenantId, role, session } = useAuthStore();
@@ -65,17 +56,6 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
   const isAdmin = role === 'admin';
   const currentUserId = session?.user?.id;
-
-  // Map each student to a distinct color by sorted name order (avoids id-hash collisions)
-  const studentColorMap = useMemo(() => {
-    const map = {};
-    [...students]
-      .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-      .forEach((s, i) => {
-        map[s.id] = LESSON_COLORS[i % LESSON_COLORS.length];
-      });
-    return map;
-  }, [students]);
 
   useEffect(() => {
     loadScheduleData();
@@ -649,13 +629,13 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
     // Lesson color comes from the per-student map (distinct per student); availability
     // falls back to a teacher-id hash over its lighter palette.
-    const lessonColor = studentColorMap[student?.id] || LESSON_COLORS[0];
+    const lessonColor = LESSON_COLOR;
     const availabilityColorIndex = teacher?.id
       ? teacher.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % availabilityColors.length
       : 0;
     const eventColor = isAvailability ? availabilityColors[availabilityColorIndex] : lessonColor;
 
-    // Completed (already logged) lessons: gray in week/day, original per-student color in month.
+    // Completed (already logged) lessons: gray in week/day, original lesson color in month.
     // Strikethrough applies in every view.
     if (isCompleted) {
       const completedContainer = view === 'month'
@@ -719,8 +699,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
   };
 
   // Choose color based on first event of the day (matches EventComponent logic)
-  const firstEvent = dayLessons[0];
-  const badgeColor = (firstEvent?.student?.id && studentColorMap[firstEvent.student.id]) || LESSON_COLORS[0];
+  const badgeColor = LESSON_COLOR;
 
   return (
     <div
@@ -749,7 +728,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
       )}
     </div>
   );
-}, [filteredEvents, setDate, setView, t, studentColorMap]);
+}, [filteredEvents, setDate, setView, t]);
 
   // Custom toolbar component
   const CustomToolbar = ({ label, onNavigate, onView }) => {
@@ -906,38 +885,6 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
           />
         </div>
       </Card>
-
-      {/* Legend */}
-      {students.length > 0 && (
-        <Card title="Students" className="mt-3.5">
-          <div className="flex flex-wrap gap-3 p-4">
-            {students.slice(0, 10).map((student) => {
-              const initials = student.full_name
-                ?.split(' ')
-                .map(n => n[0])
-                .join('')
-                .toUpperCase()
-                .substring(0, 2) || 'S';
-
-              const swatchColor = studentColorMap[student.id] || LESSON_COLORS[0];
-
-              return (
-                <div key={student.id} className="flex items-center gap-2 text-xs">
-                  <div className={`w-7 h-7 rounded flex items-center justify-center text-white font-medium ${swatchColor}`}>
-                    {initials}
-                  </div>
-                  <span className="text-muted">{student.full_name}</span>
-                </div>
-              );
-            })}
-            {students.length > 10 && (
-              <div className="text-xs text-muted">
-                +{students.length - 10} more
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-3.5">

@@ -144,6 +144,21 @@ export async function getTenant({ tenantId } = {}) {
   return data;
 }
 
+export async function updateTenant({ tenantId, name }) {
+  const client = requireSupabase();
+  const updateData = {};
+  if (name !== undefined) updateData.name = name;
+
+  const { data, error } = await client
+    .from('tenants')
+    .update(updateData)
+    .eq('id', tenantId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function listManeuvers({ tenantId } = {}) {
   const client = requireSupabase();
   let query = client

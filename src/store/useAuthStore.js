@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { getUserRole, getTenantId, signInWithPassword, signOut as signOutFromSupabase, updateUserMetadata } from '../lib/auth.js';
+import { getTenant } from '../lib/api.js';
 
-const useAuthStore = create((set) => ({
+const useAuthStore = create((set, get) => ({
   error: null,
   session: null,
   role: null,       // 'admin' | 'teacher' | 'student' | null
   tenantId: null,
+  tenant: null,     // tenant row { name, logo_url, theme_color, ... }
   full_name: null,  // User's full name from public.users
   loading: true,
 
@@ -58,6 +60,8 @@ const useAuthStore = create((set) => ({
             error: null,
           });
 
+          get().loadTenant(tenantId);
+
           supabase.auth.onAuthStateChange((_event, newSession) => {
             set({
               session: newSession,
@@ -81,6 +85,8 @@ const useAuthStore = create((set) => ({
       loading: false,
       error: null,
     });
+
+    get().loadTenant(tenantId);
 
     supabase.auth.onAuthStateChange((_event, session) => {
       set({
@@ -142,6 +148,9 @@ const useAuthStore = create((set) => ({
         loading: false,
         error: null,
       });
+
+      get().loadTenant(tenantId);
+
       return data;
     } catch (error) {
       set({ loading: false, error });
@@ -167,7 +176,21 @@ const useAuthStore = create((set) => ({
     full_name: session?.user?.user_metadata?.full_name,
   }),
 
-  clearSession: () => set({ session: null, role: null, tenantId: null, full_name: null, error: null }),
+  setTenant: (tenant) => set({ tenant }),
+
+  // Fetch the tenant row (school name, logo, theme) so the navbar/sidebar/settings can use it.
+  loadTenant: async (tenantIdArg) => {
+    const tid = tenantIdArg || get().tenantId;
+    if (!tid || !isSupabaseConfigured) return;
+    try {
+      const data = await getTenant({ tenantId: tid });
+      set({ tenant: data });
+    } catch (error) {
+      console.error('Failed to load tenant', error);
+    }
+  },
+
+  clearSession: () => set({ session: null, role: null, tenantId: null, tenant: null, full_name: null, error: null }),
 }));
 
 export default useAuthStore;

@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react';
 import {
-  Bell, Car, CalendarDays, CalendarCheck, ClipboardList, Clock,
-  LayoutDashboard, Plus, Route, Search, Settings,
+  Car, CalendarDays, CalendarCheck, ClipboardList, Clock,
+  LayoutDashboard, Route, Settings,
   Shuffle, UserPlus, Users, LogOut, User, TrendingUp, Menu, X,
 } from 'lucide-react';
-import { isSupabaseConfigured } from '../lib/supabase.js';
-import { Badge, Button, IconButton, Toast } from './ui.jsx';
+import { Toast } from './ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
 import { NAV_ITEMS, getNavItemsForRole } from '../lib/roleAccess.js';
 
 export default function Layout({ page, navigate, lang, setLang, showToast, toast, t, children }) {
-  const { session, role, full_name, logout } = useAuthStore();
+  const { session, role, full_name, logout, tenant } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -23,6 +22,7 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
           role={role}
           full_name={full_name}
           logout={logout}
+          tenant={tenant}
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
         />
@@ -33,10 +33,7 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
             navigate={navigate}
             showToast={showToast}
             t={t}
-            session={session}
-            role={role}
-            full_name={full_name}
-            logout={logout}
+            tenant={tenant}
             mobileMenuOpen={mobileMenuOpen}
             setMobileMenuOpen={setMobileMenuOpen}
           />
@@ -48,7 +45,22 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
   );
 }
 
-function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, setMobileMenuOpen }) {
+// School logo + name. `dark` for the navy sidebar, light for the header.
+function SchoolMark({ tenant, t, dark = false }) {
+  const name = tenant?.name || t.appTitle;
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      {tenant?.logo_url ? (
+        <img src={tenant.logo_url} alt="" className="h-8 w-8 shrink-0 rounded object-contain" />
+      ) : (
+        <Car size={18} className={dark ? 'text-white' : 'text-brand'} />
+      )}
+      <span className={`truncate text-[15px] font-medium ${dark ? 'text-white' : 'text-ink'}`}>{name}</span>
+    </div>
+  );
+}
+
+function Sidebar({ page, navigate, t, role, full_name, logout, tenant, mobileMenuOpen, setMobileMenuOpen }) {
   const sections = useMemo(() => {
     const allowedItems = getNavItemsForRole(role);
 
@@ -98,10 +110,7 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
   const sidebarContent = (
     <>
       <div className="border-b border-white/10 px-4 pb-3 pt-[18px]">
-        <div className="flex items-center gap-2 text-[15px] font-medium">
-          <Car size={17} />
-          {t.appTitle}
-        </div>
+        <SchoolMark tenant={tenant} t={t} dark />
         <div className="mt-0.5 text-[11px] text-white/50">{t.appSubtitle}</div>
       </div>
 
@@ -183,10 +192,7 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
   );
 }
 
-function TopHeader({ lang, setLang, navigate, showToast, t, session, role, full_name, logout, mobileMenuOpen, setMobileMenuOpen }) {
-  // Only show "New Lesson" button for admin and teacher roles
-  const canCreateLesson = role === 'admin' || role === 'teacher';
-
+function TopHeader({ lang, setLang, t, tenant, mobileMenuOpen, setMobileMenuOpen }) {
   return (
     <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-5 py-2.5">
       <div className="flex items-center gap-3">
@@ -198,31 +204,10 @@ function TopHeader({ lang, setLang, navigate, showToast, t, session, role, full_
         >
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
-        <div className="relative hidden sm:block">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
-            size={15}
-          />
-          <input
-            className="w-[200px] rounded-md border border-line bg-[#f5f5f5] py-2 pl-8 pr-3 text-[13px] outline-none focus:border-brand-mid"
-            placeholder={t.search}
-          />
-        </div>
+        <SchoolMark tenant={tenant} t={t} />
       </div>
       <div className="flex items-center gap-2">
-        <Badge tone={isSupabaseConfigured ? 'green' : 'warn'} className="hidden sm:inline-flex">
-          {isSupabaseConfigured ? t.databaseConnected : t.databaseMock}
-        </Badge>
         <SegmentedLanguage lang={lang} setLang={setLang} t={t} />
-        <IconButton label="Notifications" onClick={() => showToast(t.notificationsNone)}>
-          <Bell size={16} />
-        </IconButton>
-        {canCreateLesson && (
-          <Button primary onClick={() => navigate('log')}>
-            <Plus size={16} />
-            <span className="hidden sm:inline">{t.newLesson}</span>
-          </Button>
-        )}
       </div>
     </header>
   );

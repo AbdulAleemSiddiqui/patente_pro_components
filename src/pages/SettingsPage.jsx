@@ -8,15 +8,20 @@ import useAuthStore from '../store/useAuthStore.js';
 import {
   listManeuvers, listErrorTags,
   listHighways, createHighway, deleteHighway,
+  updateTenant,
 } from '../lib/api.js';
 
 export default function SettingsPage({ showToast, t }) {
-  const { tenantId } = useAuthStore();
+  const { tenantId, tenant, loadTenant } = useAuthStore();
   const [maneuvers, setManeuvers] = useState([]);
   const [errorTags, setErrorTags] = useState([]);
   const [highways, setHighways] = useState([]);
   const [newHighway, setNewHighway] = useState('');
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // School profile (editable)
+  const [schoolName, setSchoolName] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -42,6 +47,14 @@ export default function SettingsPage({ showToast, t }) {
       }
     })();
   }, [tenantId]);
+
+  // Populate the profile form once the tenant is loaded
+  useEffect(() => {
+    if (!tenant && tenantId) loadTenant(tenantId);
+    if (tenant) {
+      setSchoolName(tenant.name || '');
+    }
+  }, [tenant, tenantId, loadTenant]);
 
   const refreshHighways = async () => {
     try {
@@ -77,6 +90,23 @@ export default function SettingsPage({ showToast, t }) {
     }
   };
 
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      await updateTenant({
+        tenantId,
+        name: schoolName.trim(),
+      });
+      await loadTenant(tenantId);
+      showToast(`${t.settingsSaved} ✓`);
+    } catch (error) {
+      console.error('Failed to save settings', error);
+      showToast('Failed to save settings', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <Page>
@@ -93,39 +123,23 @@ export default function SettingsPage({ showToast, t }) {
         title={t.schoolSettings}
         subtitle={t.schoolSettingsSub}
         action={
-          <Button primary onClick={() => showToast(`${t.settingsSaved} ✓`)}>
+          <Button primary onClick={handleSaveProfile} className={saving ? 'opacity-60 pointer-events-none' : ''}>
             <Save size={16} />
             {t.saveSettings}
           </Button>
         }
       />
 
-      <div className="mb-4 rounded-md bg-[#6eb5f5] px-4 py-2.5 text-center">
-        <span className="text-sm font-medium text-white">Coming soon - This feature is under development</span>
-      </div>
-
       <TwoColumnGrid>
         <Card title={t.schoolProfile}>
           <div className="grid gap-3 p-4">
             <Field label={t.schoolName}>
-              <input className={fieldClass} defaultValue="Autoscuola Genova Centro" />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={t.cityLabel}>
-                <select className={fieldClass} defaultValue="Genova">
-                  <option>Genova</option>
-                  <option>Milano</option>
-                  <option>Torino</option>
-                </select>
-              </Field>
-              <Field label={t.themeColor}>
-                <input className={fieldClass} type="color" defaultValue="#1a3a5c" />
-              </Field>
-            </div>
-            <Field label={t.logoUpload}>
-              <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-line bg-[#f5f5f5] text-sm text-muted">
-                {t.logoUploadHint}
-              </div>
+              <input
+                className={fieldClass}
+                value={schoolName}
+                onChange={(e) => setSchoolName(e.target.value)}
+                placeholder="School name"
+              />
             </Field>
           </div>
         </Card>
