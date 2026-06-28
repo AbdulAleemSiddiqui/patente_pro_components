@@ -12,7 +12,8 @@ import StudentProgressPage from './pages/StudentProgressPage.jsx';
 
 const COPY = {
   en: {
-    appTitle: 'PatentePro', appSubtitle: 'Instructor management', instructor: 'Instructor',
+    appTitle: 'Patente Pro', appSubtitle: 'Instructor management', instructor: 'Instructor',
+    welcomeTo: 'Welcome to',
     main: 'Main', admin: 'Admin', tools: 'Tools', instructor: 'Students', student: 'Student',
     dashboard: 'Dashboard', students: 'Progress', log: 'Log lesson',
     settings: 'Settings', users: 'Users', availabilityAdmin: 'Availability',
@@ -131,8 +132,9 @@ const COPY = {
     needsImprovement: 'Needs improvement',
   },
   it: {
-    appTitle: 'PatentePro', appSubtitle: 'Gestione istruttori', instructor: 'Istruttore',
+    appTitle: 'Patente Pro', appSubtitle: 'Gestione istruttori', instructor: 'Istruttore',
     main: 'Principale', admin: 'Admin', tools: 'Strumenti', instructor: 'Istruttore', student: 'Studente',
+    welcomeTo: 'Benvenuto a',
     dashboard: 'Dashboard', students: 'Studenti', log: 'Registra lezione',
     settings: 'Impostazioni', users: 'Utenti', availabilityAdmin: 'Disponibilità',
     schedule: 'Calendario', manoeuvres: 'Manovre',

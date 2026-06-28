@@ -22,7 +22,6 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
           role={role}
           full_name={full_name}
           logout={logout}
-          tenant={tenant}
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
         />
@@ -30,8 +29,6 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
           <TopHeader
             lang={lang}
             setLang={setLang}
-            navigate={navigate}
-            showToast={showToast}
             t={t}
             tenant={tenant}
             mobileMenuOpen={mobileMenuOpen}
@@ -45,22 +42,7 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
   );
 }
 
-// School logo + name. `dark` for the navy sidebar, light for the header.
-function SchoolMark({ tenant, t, dark = false }) {
-  const name = tenant?.name || t.appTitle;
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      {tenant?.logo_url ? (
-        <img src={tenant.logo_url} alt="" className="h-8 w-8 shrink-0 rounded object-contain" />
-      ) : (
-        <Car size={18} className={dark ? 'text-white' : 'text-brand'} />
-      )}
-      <span className={`truncate text-[15px] font-medium ${dark ? 'text-white' : 'text-ink'}`}>{name}</span>
-    </div>
-  );
-}
-
-function Sidebar({ page, navigate, t, role, full_name, logout, tenant, mobileMenuOpen, setMobileMenuOpen }) {
+function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, setMobileMenuOpen }) {
   const sections = useMemo(() => {
     const allowedItems = getNavItemsForRole(role);
 
@@ -110,7 +92,10 @@ function Sidebar({ page, navigate, t, role, full_name, logout, tenant, mobileMen
   const sidebarContent = (
     <>
       <div className="border-b border-white/10 px-4 pb-3 pt-[18px]">
-        <SchoolMark tenant={tenant} t={t} dark />
+        <div className="flex items-center gap-2 text-[15px] font-medium">
+          <Car size={17} />
+          {t.appTitle}
+        </div>
         <div className="mt-0.5 text-[11px] text-white/50">{t.appSubtitle}</div>
       </div>
 
@@ -204,7 +189,10 @@ function TopHeader({ lang, setLang, t, tenant, mobileMenuOpen, setMobileMenuOpen
         >
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
-        <SchoolMark tenant={tenant} t={t} />
+        <span className="text-[15px] text-muted">
+          {t.welcomeTo || 'Welcome to'}{' '}
+          <span className="font-bold" style={{ color: '#1A3A5C' }}>{tenant?.name || t.appTitle}</span>
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <SegmentedLanguage lang={lang} setLang={setLang} t={t} />
