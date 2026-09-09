@@ -407,3 +407,30 @@ For scheduling and editing:
 **Notes:**
 - Renaming a maneuver propagates everywhere automatically — Log lesson, Progress, and Students pages read names from the database
 - Add / delete / reorder of maneuvers remains future work (Phase 4 checklist updated)
+
+---
+
+## 🆕 Latest Feature (September 9, 2026) — Lesson vs Exam
+
+### Lesson Type on Scheduled Lessons
+
+**Problem Solved:**
+- A scheduled slot can be a regular lesson or an examination, but there was no way to record or see which
+
+**Solution Implemented:**
+
+1. **Database** (`supabase/migrations/202609090002_add_lesson_kind.sql`):
+   - `lessons.kind` text column — `'lesson'` (default, covers existing rows) or `'exam'`, enforced by a check constraint
+
+2. **API** (`src/lib/api.js`):
+   - `updateLesson` now accepts `kind` (`createLesson` already passes the full payload through)
+
+3. **Lessons page** (`src/pages/LessonsAdminPage.jsx`):
+   - Add/edit lesson modal has a "Type" field (Lesson / Exam)
+   - Scheduled lessons table has a Type column — blue badge for Lesson, warn badge for Exam
+   - Duration column now uses the same 1 hour / 2 hours labels as the form
+
+4. **Translations:** `laKind`, `laKindLesson`, `laKindExam` (en + it)
+
+**Notes:**
+- The Schedule calendar and other pages are untouched — kind currently shows only in the lessons list, as requested

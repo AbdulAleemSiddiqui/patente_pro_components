@@ -40,6 +40,7 @@ const emptyLesson = () => ({
   studentId: '',
   startAt: '',
   duration_minutes: 60,
+  kind: 'lesson',
 });
 
 const emptyAvailability = () => ({ teacherId: '', startAt: '', endAt: '' });
@@ -111,6 +112,7 @@ export default function LessonsAdminPage({ showToast, t }) {
       studentId: lesson.student_id,
       startAt: toLocalInput(lesson.scheduled_at),
       duration_minutes: lesson.duration_minutes,
+      kind: lesson.kind || 'lesson',
     });
   };
 
@@ -170,6 +172,7 @@ export default function LessonsAdminPage({ showToast, t }) {
         student_id: draft.studentId,
         scheduled_at: new Date(draft.startAt).toISOString(),
         duration_minutes: Number(draft.duration_minutes),
+        kind: draft.kind || 'lesson',
         // status is auto-computed by the backend
       };
 
@@ -296,6 +299,7 @@ export default function LessonsAdminPage({ showToast, t }) {
                   <th className="px-4 py-2.5 font-medium">{t.teacher}</th>
                   <th className="px-4 py-2.5 font-medium">{t.date} & {t.time}</th>
                   <th className="px-4 py-2.5 font-medium">{t.duration}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.laKind}</th>
                   <th className="px-4 py-2.5 font-medium">{t.status}</th>
                   <th className="px-4 py-2.5 font-medium text-right">{t.actions}</th>
                 </tr>
@@ -303,7 +307,7 @@ export default function LessonsAdminPage({ showToast, t }) {
               <tbody>
                 {sortedLessons.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-muted">
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted">
                       {t.noLessonsAdmin}
                     </td>
                   </tr>
@@ -313,7 +317,12 @@ export default function LessonsAdminPage({ showToast, t }) {
                       <td className="px-4 py-2.5">{nameById(students, lesson.student_id)}</td>
                       <td className="px-4 py-2.5">{nameById(teachers, lesson.teacher_id)}</td>
                       <td className="px-4 py-2.5">{fmtDateTime(lesson.scheduled_at)}</td>
-                      <td className="px-4 py-2.5">{lesson.duration_minutes} min</td>
+                      <td className="px-4 py-2.5">{durationLabel(lesson.duration_minutes, t)}</td>
+                      <td className="px-4 py-2.5">
+                        <Badge tone={lesson.kind === 'exam' ? 'warn' : 'blue'}>
+                          {lesson.kind === 'exam' ? t.laKindExam : t.laKindLesson}
+                        </Badge>
+                      </td>
                       <td className="px-4 py-2.5">
                         <Badge tone={statusTone[lesson.status] || 'blue'}>{t[lesson.status] || lesson.status}</Badge>
                       </td>
@@ -432,6 +441,17 @@ export default function LessonsAdminPage({ showToast, t }) {
                   </select>
                 </Field>
               </div>
+
+              <Field label={`${t.laKind}`}>
+                <select
+                  className={fieldClass}
+                  value={lessonModal.kind || 'lesson'}
+                  onChange={(e) => setLessonModal({ ...lessonModal, kind: e.target.value })}
+                >
+                  <option value="lesson">{t.laKindLesson}</option>
+                  <option value="exam">{t.laKindExam}</option>
+                </select>
+              </Field>
 
               <Field label={`${t.teacher} *`}>
                 <select

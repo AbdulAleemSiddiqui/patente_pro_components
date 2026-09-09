@@ -235,7 +235,7 @@ export async function createLesson(payload) {
   return data;
 }
 
-export async function updateLesson({ id, scheduled_at, duration_minutes, teacher_id, student_id, status }) {
+export async function updateLesson({ id, scheduled_at, duration_minutes, teacher_id, student_id, status, kind }) {
   const client = requireSupabase();
   const updateData = {};
   if (scheduled_at !== undefined) updateData.scheduled_at = scheduled_at;
@@ -243,6 +243,7 @@ export async function updateLesson({ id, scheduled_at, duration_minutes, teacher
   if (teacher_id !== undefined) updateData.teacher_id = teacher_id;
   if (student_id !== undefined) updateData.student_id = student_id;
   if (status !== undefined) updateData.status = status;
+  if (kind !== undefined) updateData.kind = kind;
 
   const { data, error } = await client
     .from('lessons')
