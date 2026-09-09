@@ -380,3 +380,30 @@ For scheduling and editing:
 - Checks for conflicting lessons (excluding current lesson when editing)
 - Returns only teachers who pass both checks
 - Shows helpful count messages ("X of Y teachers available")
+
+---
+
+## 🆕 Latest Feature (September 9, 2026)
+
+### Editable Maneuver Catalog (Admin)
+
+**Problem Solved:**
+- Maneuver names in the catalog were only set by seed migrations — admins could not correct or localize them from the app
+
+**Solution Implemented:**
+
+1. **Rename API** (`src/lib/api.js`):
+   - `updateManeuver({ id, name })` — updates `maneuvers.name` for the given row
+
+2. **Editable catalog UI** (`src/pages/SettingsPage.jsx`):
+   - Maneuver catalog grouped by parent type (FASE 1 / FASE 2 / PERCORSO URBANO), matching the Log lesson page grouping
+   - Each maneuver chip has a pencil button; clicking switches to an inline input (Enter saves, Esc cancels, ✓/✕ buttons available)
+   - Empty names and duplicate names (against the `unique (tenant_id, name)` constraint) are rejected with an error toast
+   - On success the catalog reloads and a confirmation toast is shown
+
+3. **RLS Migration** (`supabase/migrations/202609090001_disable_rls_maneuvers.sql`):
+   - Disables RLS on `maneuvers` (the jwt-claim policies could never pass without custom JWT claims — same fix already applied to the feedback tables and tenants)
+
+**Notes:**
+- Renaming a maneuver propagates everywhere automatically — Log lesson, Progress, and Students pages read names from the database
+- Add / delete / reorder of maneuvers remains future work (Phase 4 checklist updated)

@@ -180,6 +180,19 @@ export async function listManeuverTypes({ tenantId } = {}) {
   return data;
 }
 
+export async function updateManeuver({ id, name }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('maneuvers')
+    .update({ name })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function listErrorTags({ tenantId } = {}) {
   const client = requireSupabase();
   let query = client.from('error_tags').select('*').order('label');

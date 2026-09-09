@@ -10,7 +10,12 @@ import {
   listTeacherAvailability, createTeacherAvailability, deleteTeacherAvailability,
 } from '../lib/api.js';
 
-const DURATIONS = [30, 45, 50, 60, 90, 120];
+// Only 1-hour and 2-hour lessons are bookable from this page for now.
+const DURATIONS = [60, 120];
+
+// Label supported lengths as hours; any legacy duration (edit flow) as minutes
+const durationLabel = (d, t) =>
+  d === 60 ? t.durationHour : d === 120 ? t.duration2Hours : `${d} min`;
 
 // Format an ISO date for a datetime-local input (YYYY-MM-DDTHH:mm), local time
 function toLocalInput(iso) {
@@ -139,6 +144,12 @@ export default function LessonsAdminPage({ showToast, t }) {
 
   const prerequisitesMet = !!(lessonModal?.startAt && lessonModal?.duration_minutes && lessonModal?.studentId);
   const availableTeachers = getAvailableTeachersForSlot();
+
+  // When editing a legacy lesson whose duration is outside DURATIONS, keep that
+  // value visible in the dropdown so the form doesn't silently change it on save.
+  const durationOptions = [
+    ...new Set([Number(lessonModal?.duration_minutes), ...DURATIONS].filter(Boolean)),
+  ].sort((a, b) => a - b);
 
   const saveLesson = async () => {
     const draft = lessonModal;
@@ -402,8 +413,8 @@ export default function LessonsAdminPage({ showToast, t }) {
                     value={lessonModal.duration_minutes}
                     onChange={(e) => setLessonModal({ ...lessonModal, duration_minutes: e.target.value, teacherId: '' })}
                   >
-                    {DURATIONS.map((d) => (
-                      <option key={d} value={d}>{d} min</option>
+                    {durationOptions.map((d) => (
+                      <option key={d} value={d}>{durationLabel(d, t)}</option>
                     ))}
                   </select>
                 </Field>

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Save, X } from 'lucide-react';
+import { Check, Pencil, Save, X } from 'lucide-react';
 import {
   Button, Card, Field, fieldClass,
-  Page, PageHeader, Tag, TwoColumnGrid,
+  Page, PageHeader, SectionLabel, Tag, TwoColumnGrid,
 } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
 import {
-  listManeuvers, listErrorTags,
+  listManeuvers, listErrorTags, updateManeuver,
   listHighways, createHighway, deleteHighway,
   updateTenant,
 } from '../lib/api.js';
@@ -19,6 +19,11 @@ export default function SettingsPage({ showToast, t }) {
   const [newHighway, setNewHighway] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Maneuver rename state
+  const [editingManeuverId, setEditingManeuverId] = useState(null);
+  const [maneuverDraft, setManeuverDraft] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   // School profile (editable)
   const [schoolName, setSchoolName] = useState('');
@@ -90,6 +95,58 @@ export default function SettingsPage({ showToast, t }) {
     }
   };
 
+  const refreshManeuvers = async () => {
+    try {
+      const data = await listManeuvers({ tenantId });
+      setManeuvers(data || []);
+    } catch (error) {
+      console.error('Failed to reload maneuvers', error);
+    }
+  };
+
+  const handleManeuverRenameStart = (maneuver) => {
+    setEditingManeuverId(maneuver.id);
+    setManeuverDraft(maneuver.name);
+  };
+
+  const handleManeuverRenameCancel = () => {
+    setEditingManeuverId(null);
+    setManeuverDraft('');
+  };
+
+  const handleManeuverRenameSave = async (maneuver) => {
+    const name = maneuverDraft.trim();
+    if (!name) {
+      showToast(t.settingsManeuverRenameFailed, 'error');
+      return;
+    }
+    if (name === maneuver.name) {
+      handleManeuverRenameCancel();
+      return;
+    }
+    // Reject duplicates up-front (maneuvers has a unique (tenant_id, name) constraint)
+    const duplicate = maneuvers.some(
+      (m) => m.id !== maneuver.id && m.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (duplicate) {
+      showToast(t.settingsManeuverRenameFailed, 'error');
+      return;
+    }
+    setRenaming(true);
+    try {
+      await updateManeuver({ id: maneuver.id, name });
+      setEditingManeuverId(null);
+      setManeuverDraft('');
+      await refreshManeuvers();
+      showToast(`${t.maneuverCatalog}: ${name} ✓`);
+    } catch (error) {
+      console.error('Failed to rename maneuver', error);
+      showToast(t.settingsManeuverRenameFailed, 'error');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
@@ -105,6 +162,24 @@ export default function SettingsPage({ showToast, t }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Group maneuvers by their parent type (FASE 1 / FASE 2 / PERCORSO URBANO),
+  // ordered by the type's order_index, then each maneuver's order_index —
+  // same grouping as the Log lesson page.
+  const getManeuversByType = () => {
+    const sorted = [...maneuvers].sort((a, b) => {
+      const ta = a.type?.order_index ?? 999;
+      const tb = b.type?.order_index ?? 999;
+      if (ta !== tb) return ta - tb;
+      return (a.order_index ?? 0) - (b.order_index ?? 0);
+    });
+    return sorted.reduce((acc, maneuver) => {
+      const type = maneuver.type?.name || 'Other';
+      if (!acc[type]) acc[type] = [];
+      acc[type].push(maneuver);
+      return acc;
+    }, {});
   };
 
   if (loading) {
@@ -187,10 +262,70 @@ export default function SettingsPage({ showToast, t }) {
 
       <TwoColumnGrid>
         <Card title={t.maneuverCatalog}>
-          <div className="flex flex-wrap gap-1.5 p-4">
-            {maneuvers.map((maneuver) => (
-              <Tag key={maneuver.id} passive active>{maneuver.name}</Tag>
-            ))}
+          <div className="space-y-3 p-4">
+            {maneuvers.length === 0 ? (
+              <span className="text-sm text-muted">—</span>
+            ) : (
+              Object.entries(getManeuversByType()).map(([typeName, items]) => (
+                <div key={typeName}>
+                  <SectionLabel>{typeName}</SectionLabel>
+                  <div className="flex flex-wrap gap-1.5">
+                    {items.map((maneuver) =>
+                      editingManeuverId === maneuver.id ? (
+                        <span
+                          key={maneuver.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-brand bg-white px-2.5 py-0.5"
+                        >
+                          <input
+                            autoFocus
+                            className="w-44 bg-transparent text-xs outline-none"
+                            value={maneuverDraft}
+                            disabled={renaming}
+                            onChange={(e) => setManeuverDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleManeuverRenameSave(maneuver);
+                              if (e.key === 'Escape') handleManeuverRenameCancel();
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-full text-success hover:opacity-70"
+                            title={t.saveChanges}
+                            disabled={renaming}
+                            onClick={() => handleManeuverRenameSave(maneuver)}
+                          >
+                            <Check size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-full text-muted hover:text-accent"
+                            title={t.cancel}
+                            onClick={handleManeuverRenameCancel}
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ) : (
+                        <span
+                          key={maneuver.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-brand-mid bg-brand-light px-2.5 py-1 text-xs text-brand-mid"
+                        >
+                          {maneuver.name}
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-full hover:text-accent"
+                            title={t.edit}
+                            onClick={() => handleManeuverRenameStart(maneuver)}
+                          >
+                            <Pencil size={11} />
+                          </button>
+                        </span>
+                      ),
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </Card>
         <Card title={t.errorTagCatalog}>

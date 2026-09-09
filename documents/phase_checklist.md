@@ -56,7 +56,7 @@
 * [ ] Swap request functionality
 * [ ] Dashboard metrics connection
 * [ ] Error tag management UI
-* [ ] Maneuver management UI
+* [x] Maneuver rename UI (admin) — add/delete/reorder of maneuvers still pending
 * [ ] Student progress tracking
 * [ ] Calendar view optimizations
 * [ ] Mobile responsiveness improvements
