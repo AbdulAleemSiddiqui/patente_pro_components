@@ -35,7 +35,7 @@ export default function ProfilePage({ showToast, t, lang }) {
 
   const handleSave = async () => {
     if (!editData.full_name) {
-      showToast('Name is required');
+      showToast(t.profileNameRequired);
       return;
     }
 
@@ -48,7 +48,7 @@ export default function ProfilePage({ showToast, t, lang }) {
         phone: editData.phone || null,
       });
 
-      showToast('Profile updated successfully');
+      showToast(t.profileUpdated);
       setEditing(false);
 
       // Refresh session to get updated metadata
@@ -61,7 +61,7 @@ export default function ProfilePage({ showToast, t, lang }) {
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
-      showToast(`Failed to update: ${error.message}`);
+      showToast(t.profileUpdateFailed.replace('{error}', error.message));
     } finally {
       setUpdating(false);
     }
@@ -76,10 +76,10 @@ export default function ProfilePage({ showToast, t, lang }) {
 
       if (error) throw error;
 
-      showToast('Password reset email sent! Check your inbox.');
+      showToast(t.profileResetSent);
     } catch (error) {
       console.error('Failed to send reset email:', error);
-      showToast(`Failed to send reset email: ${error.message}`);
+      showToast(t.profileResetFailed.replace('{error}', error.message));
     }
   };
 
@@ -91,7 +91,7 @@ export default function ProfilePage({ showToast, t, lang }) {
     return (
       <Page>
         <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Please login to view your profile
+          {t.profileLoginRequired}
         </div>
       </Page>
     );
@@ -100,67 +100,67 @@ export default function ProfilePage({ showToast, t, lang }) {
   return (
     <Page>
       <PageHeader
-        title="My Profile"
-        subtitle="Manage your account settings"
+        title={t.profileTitle}
+        subtitle={t.profileSubtitle}
         action={
           !editing && (
             <Button onClick={handleEdit}>
-              Edit Profile
+              {t.profileEditButton}
             </Button>
           )
         }
       />
 
-      <Card title="Account Information">
+      <Card title={t.profileAccountInfo}>
         <div className="space-y-4 p-4">
           <div className="flex items-center gap-4">
             <div className="grid size-16 shrink-0 place-items-center rounded-full bg-brand-light text-2xl font-medium text-brand">
               {full_name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U'}
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="truncate text-lg font-medium">{full_name || 'User'}</h3>
+              <h3 className="truncate text-lg font-medium">{full_name || t.userFallback}</h3>
               <p className="text-sm text-muted capitalize">{role}</p>
             </div>
           </div>
 
           {editing ? (
             <div className="space-y-4 pt-4">
-              <Field label="Full Name">
+              <Field label={t.profileFullName}>
                 <input
                   type="text"
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={editData.full_name}
                   onChange={handleInputChange('full_name')}
-                  placeholder="Enter your full name"
+                  placeholder={t.profileFullNamePlaceholder}
                 />
               </Field>
 
-              <Field label="Email">
+              <Field label={t.profileEmailLabel}>
                 <input
                   type="email"
                   className="w-full rounded-md border border-line bg-gray-100 px-2.5 py-2 text-[13px] text-muted outline-none"
                   value={userEmail}
                   disabled
                 />
-                <p className="mt-1 text-[11px] text-muted">Email cannot be changed</p>
+                <p className="mt-1 text-[11px] text-muted">{t.profileEmailLocked}</p>
               </Field>
 
-              <Field label="Phone">
+              <Field label={t.profilePhoneLabel}>
                 <input
                   type="tel"
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={editData.phone}
                   onChange={handleInputChange('phone')}
-                  placeholder="Enter your phone number"
+                  placeholder={t.profilePhonePlaceholder}
                 />
               </Field>
 
               <div className="flex justify-end gap-3 pt-2">
                 <Button onClick={handleCancel} disabled={updating}>
-                  Cancel
+                  {t.cancel}
                 </Button>
                 <Button primary onClick={handleSave} disabled={updating}>
-                  {updating ? 'Saving...' : 'Save Changes'}
+                  {updating ? t.saving : t.saveChanges}
                 </Button>
               </div>
             </div>
@@ -169,21 +169,21 @@ export default function ProfilePage({ showToast, t, lang }) {
               <div className="grid grid-cols-[120px_1fr] gap-2 text-sm">
                 <div className="flex items-center gap-2 text-muted">
                   <User size={16} />
-                  <span>Name:</span>
+                  <span>{t.profileNameColon}</span>
                 </div>
-                <span className="font-medium">{full_name || 'Not set'}</span>
+                <span className="font-medium">{full_name || t.notSet}</span>
               </div>
               <div className="grid grid-cols-[120px_1fr] gap-2 text-sm">
                 <div className="flex items-center gap-2 text-muted">
                   <Mail size={16} />
-                  <span>Email:</span>
+                  <span>{t.profileEmailColon}</span>
                 </div>
                 <span className="font-medium break-all">{userEmail}</span>
               </div>
               <div className="grid grid-cols-[120px_1fr] gap-2 text-sm">
                 <div className="flex items-center gap-2 text-muted">
                   <Building size={16} />
-                  <span>Role:</span>
+                  <span>{t.profileRoleColon}</span>
                 </div>
                 <Badge tone="blue" className="w-fit capitalize">{role}</Badge>
               </div>
@@ -192,19 +192,19 @@ export default function ProfilePage({ showToast, t, lang }) {
         </div>
       </Card>
 
-      <Card title="Account Settings">
+      <Card title={t.profileAccountSettings}>
         <div className="space-y-4 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Lock size={16} className="text-muted" />
               <div>
-                <div className="text-sm font-medium">Password</div>
-                <div className="text-[13px] text-muted">Send password reset email</div>
+                <div className="text-sm font-medium">{t.profilePasswordLabel}</div>
+                <div className="text-[13px] text-muted">{t.profileResetDescription}</div>
               </div>
             </div>
-            <Button small disabled className="opacity-60" title="Coming soon">
+            <Button small disabled className="opacity-60" title={t.comingSoon}>
               <Clock size={12} />
-              <span className="ml-1">Coming soon</span>
+              <span className="ml-1">{t.comingSoon}</span>
             </Button>
           </div>
         </div>

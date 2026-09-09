@@ -75,7 +75,7 @@ export default function SettingsPage({ showToast, t }) {
       showToast(`${t.highways}: ${name} ✓`);
     } catch (error) {
       console.error('Failed to add highway', error);
-      showToast('Failed to add highway', 'error');
+      showToast(t.settingsHighwayAddFailed, 'error');
     }
   };
 
@@ -86,7 +86,7 @@ export default function SettingsPage({ showToast, t }) {
       showToast(`${t.highways} ✓`);
     } catch (error) {
       console.error('Failed to delete highway', error);
-      showToast('Failed to delete highway', 'error');
+      showToast(t.settingsHighwayDeleteFailed, 'error');
     }
   };
 
@@ -101,7 +101,7 @@ export default function SettingsPage({ showToast, t }) {
       showToast(`${t.settingsSaved} ✓`);
     } catch (error) {
       console.error('Failed to save settings', error);
-      showToast('Failed to save settings', 'error');
+      showToast(t.settingsSaveFailed, 'error');
     } finally {
       setSaving(false);
     }
@@ -111,7 +111,7 @@ export default function SettingsPage({ showToast, t }) {
     return (
       <Page>
         <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Loading...
+          {t.loadingDots}
         </div>
       </Page>
     );
@@ -138,7 +138,7 @@ export default function SettingsPage({ showToast, t }) {
                 className={fieldClass}
                 value={schoolName}
                 onChange={(e) => setSchoolName(e.target.value)}
-                placeholder="School name"
+                placeholder={t.settingsSchoolNamePlaceholder}
               />
             </Field>
           </div>
@@ -159,7 +159,7 @@ export default function SettingsPage({ showToast, t }) {
                     <button
                       type="button"
                       className="ml-0.5 inline-flex items-center justify-center rounded-full hover:text-accent"
-                      title="Remove"
+                      title={t.settingsRemove}
                       onClick={() => handleDeleteHighway(hw.id)}
                     >
                       <X size={12} />

@@ -107,7 +107,7 @@ export default function StudentsPage({ t }) {
   if (loading) {
     return (
       <Page>
-        <div className="flex items-center justify-center py-12 text-sm text-muted">Loading…</div>
+        <div className="flex items-center justify-center py-12 text-sm text-muted">{t.loading}</div>
       </Page>
     );
   }
@@ -132,7 +132,7 @@ export default function StudentsPage({ t }) {
             <tbody>
               {students.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-muted">No students found</td>
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted">{t.studentsNotFound}</td>
                 </tr>
               ) : (
                 students.map((s) => {
@@ -204,7 +204,7 @@ function StudentDetail({ student, lessons, t, onClose }) {
     <Card
       title={`${student.full_name} — ${t.profileDetail}`}
       action={
-        <button onClick={onClose} className="text-xs text-muted hover:text-ink">Close</button>
+        <button onClick={onClose} className="text-xs text-muted hover:text-ink">{t.close}</button>
       }
     >
       <div className="flex flex-col md:flex-row">
