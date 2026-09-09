@@ -16,7 +16,15 @@ const COPY = { en, it };
 
 export default function App() {
   const [page,  setPage]  = useState('dashboard');
-  const [lang,  setLang]  = useState('en');
+  // Language preference persists across visits (localStorage is safest here —
+  // the app has no per-user profile field for it and RLS/db changes aren't wanted).
+  const [lang,  setLangState] = useState(() => {
+    try { return localStorage.getItem('lang') === 'it' ? 'it' : 'en'; } catch { return 'en'; }
+  });
+  const setLang = (next) => {
+    setLangState(next);
+    try { localStorage.setItem('lang', next); } catch { /* private mode etc. — ignore */ }
+  };
   const [toast, setToast] = useState('');
   const t = COPY[lang];
 
