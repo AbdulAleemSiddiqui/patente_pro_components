@@ -58,6 +58,7 @@
 * [ ] Error tag management UI
 * [x] Maneuver rename UI (admin) — add/delete/reorder of maneuvers still pending
 * [x] Lesson vs Exam type field on scheduled lessons
+* [x] Examiner directory (table + admin page with notes)
 * [ ] Student progress tracking
 * [ ] Calendar view optimizations
 * [ ] Mobile responsiveness improvements

@@ -434,3 +434,38 @@ For scheduling and editing:
 
 **Notes:**
 - The Schedule calendar and other pages are untouched — kind currently shows only in the lessons list, as requested
+
+---
+
+## 🆕 Latest Feature (September 9, 2026) — Examiners
+
+### Examiner Directory
+
+**Problem Solved:**
+- Schools need a place to record the examiners who conduct the practical exam, plus free-form notes about each (strictness, preferences, focus areas)
+
+**Solution Implemented:**
+
+1. **Database** (`supabase/migrations/202609090003_add_examiners.sql`):
+   - New `examiners` table — `id`, `tenant_id` (the only relation, to tenants), `name`, `notes` (multi-line), `created_at`
+   - `unique (tenant_id, name)` constraint; RLS intentionally left off (app convention: client-side tenant scoping)
+
+2. **API** (`src/lib/api.js`):
+   - `listExaminers`, `createExaminer`, `updateExaminer`, `deleteExaminer`
+
+3. **New page** (`src/pages/ExaminersPage.jsx`, admin-only):
+   - **Top section:** examiner name list — click a row to select; edit (pencil) and delete (trash) buttons in each row
+   - **Bottom section:** full-width, multi-line notes of the selected examiner (rendered with `whitespace-pre-wrap`)
+   - **Add button** in the page header opens a popup (name + notes textarea) — same modal style as the lessons page; duplicate names are rejected up-front
+   - First examiner auto-selected on load; selection falls back gracefully after delete
+
+4. **Navigation:** "Examiner" entry in the Tools section (`roleAccess.js` + `Layout.jsx` UserCheck icon + `App.jsx` route) — **visible and editable by admins and teachers**
+
+5. **Translations:** `examiner*` / `examiners*` keys (en + it)
+
+**RLS fix** (`supabase/migrations/202609090004_disable_rls_examiners.sql`):
+- If the table was created via the Supabase dashboard it gets RLS enabled with no workable policy, so inserts fail with 42501. This migration disables RLS, matching the app convention (see 202606270001 / 202606280001 / 202609090001).
+
+**UI polish:**
+- Subtitle removed; short "Add" button now sits beside the page title
+- Examiner list capped at ~20vh with its own scrollbar; notes area capped at ~80vh with its own scrollbar

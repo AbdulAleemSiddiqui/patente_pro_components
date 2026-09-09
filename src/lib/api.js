@@ -228,6 +228,44 @@ export async function deleteHighway({ id }) {
   if (error) throw error;
 }
 
+export async function listExaminers({ tenantId } = {}) {
+  const client = requireSupabase();
+  let query = client.from('examiners').select('*').order('name');
+  query = byTenant(query, tenantId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function createExaminer({ tenantId, name, notes }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('examiners')
+    .insert({ tenant_id: tenantId, name, notes: notes || '' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateExaminer({ id, name, notes }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('examiners')
+    .update({ name, notes: notes || '' })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteExaminer({ id }) {
+  const client = requireSupabase();
+  const { error } = await client.from('examiners').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function createLesson(payload) {
   const client = requireSupabase();
   const { data, error } = await client.from('lessons').insert(payload).select().single();

@@ -7,6 +7,7 @@ import SettingsPage     from './pages/SettingsPage.jsx';
 import UsersPage        from './pages/UsersPage.jsx';
 import SchedulePage     from './pages/SchedulePage.jsx';
 import LessonsAdminPage from './pages/LessonsAdminPage.jsx';
+import ExaminersPage    from './pages/ExaminersPage.jsx';
 import ProfilePage      from './pages/ProfilePage.jsx';
 import StudentProgressPage from './pages/StudentProgressPage.jsx';
 import en from './translations/en.json';
@@ -46,10 +47,11 @@ export default function App() {
       {page === 'users'              && <UsersPage        {...pageProps} />}
       {page === 'schedule'           && <SchedulePage     {...pageProps} />}
       {page === 'lessonsAdmin'       && <LessonsAdminPage {...pageProps} />}
+      {page === 'examiners'          && <ExaminersPage    {...pageProps} />}
       {page === 'profile'            && <ProfilePage      {...pageProps} />}
       {page === 'progress'           && <StudentProgressPage {...pageProps} />}
       {page === 'student_progress'    && <StudentProgressPage {...pageProps} />}
-      {!['students','log','settings','users','schedule','lessonsAdmin','profile','progress','student_progress'].includes(page) && (
+      {!['students','log','settings','users','schedule','lessonsAdmin','examiners','profile','progress','student_progress'].includes(page) && (
         <DashboardPage {...pageProps} />
       )}
     </Layout>

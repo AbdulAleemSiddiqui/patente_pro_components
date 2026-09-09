@@ -18,6 +18,7 @@ export const NAV_ITEMS = [
   { section: 'student', page: 'students',        icon: 'TrendingUp',         label: 'Progress' },
 
   // Tools section - available to appropriate roles
+  { section: 'tools', page: 'examiners',        icon: 'UserCheck',          label: 'Examiner' },
   { section: 'tools', page: 'settings',         icon: 'Settings',           label: 'Settings' },
 
   // Profile section - all users see this
@@ -35,6 +36,7 @@ export const ROLE_ACCESS = {
     'students',
     'users',
     'lessonsAdmin',
+    'examiners',
     'settings',
     'profile',
   ],
@@ -44,6 +46,7 @@ export const ROLE_ACCESS = {
     'schedule',
     'log',
     'students',       // Same students page as admin (with student data)
+    'examiners',      // Examiner directory — view and edit examiners + notes
     'profile',
   ],
 

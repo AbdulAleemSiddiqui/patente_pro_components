@@ -20,6 +20,7 @@ Full access to all features and settings.
 - ✅ Lesson Log - Log lessons for any instructor
 - ✅ Settings - School settings, routes, maneuvers, error tags
 - ✅ Maneuvers - View and manage maneuver catalog
+- ✅ Examiner - View and manage examiners and notes
 - ✅ Swap - View and manage all swap requests
 - ✅ Profile - View/edit own profile
 
@@ -40,6 +41,7 @@ Limited to their own students, schedule, and availability.
 - ✅ Availability - Set their weekly availability
 - ✅ Students - View list of their students (read-only)
 - ✅ Maneuvers - View maneuver catalog (read-only)
+- ✅ Examiner - View and manage examiners and notes
 - ✅ Swap - Request swaps with other teachers
 - ✅ Profile - View/edit own profile
 
@@ -128,6 +130,7 @@ Each page should check user roles before showing sensitive actions (create, edit
 | Log Lessons | ✅ | ✅ (own) | ❌ |
 | School Settings | ✅ | ❌ | ❌ |
 | View Maneuvers | ✅ | ✅ (view) | ✅ (view) |
+| View Examiners | ✅ | ✅ (edit) | ❌ |
 | Request Swaps | ✅ | ✅ | ❌ |
 | Edit Profile | ✅ | ✅ | ✅ |
 

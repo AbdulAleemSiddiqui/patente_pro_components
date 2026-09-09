@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Car, CalendarDays, CalendarCheck, ClipboardList, Clock,
-  LayoutDashboard, Route, Settings,
+  LayoutDashboard, Route, Settings, UserCheck,
   Shuffle, UserPlus, Users, LogOut, User, TrendingUp, Menu, X,
 } from 'lucide-react';
 import { Toast } from './ui.jsx';
@@ -70,6 +70,7 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
     Settings,
     Route,
     Shuffle,
+    UserCheck,
     User,
     TrendingUp,
   };
