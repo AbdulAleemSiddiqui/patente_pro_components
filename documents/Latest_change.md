@@ -380,3 +380,92 @@ For scheduling and editing:
 - Checks for conflicting lessons (excluding current lesson when editing)
 - Returns only teachers who pass both checks
 - Shows helpful count messages ("X of Y teachers available")
+
+---
+
+## 🆕 Latest Feature (September 9, 2026)
+
+### Editable Maneuver Catalog (Admin)
+
+**Problem Solved:**
+- Maneuver names in the catalog were only set by seed migrations — admins could not correct or localize them from the app
+
+**Solution Implemented:**
+
+1. **Rename API** (`src/lib/api.js`):
+   - `updateManeuver({ id, name })` — updates `maneuvers.name` for the given row
+
+2. **Editable catalog UI** (`src/pages/SettingsPage.jsx`):
+   - Maneuver catalog grouped by parent type (FASE 1 / FASE 2 / PERCORSO URBANO), matching the Log lesson page grouping
+   - Each maneuver chip has a pencil button; clicking switches to an inline input (Enter saves, Esc cancels, ✓/✕ buttons available)
+   - Empty names and duplicate names (against the `unique (tenant_id, name)` constraint) are rejected with an error toast
+   - On success the catalog reloads and a confirmation toast is shown
+
+3. **RLS Migration** (`supabase/migrations/202609090001_disable_rls_maneuvers.sql`):
+   - Disables RLS on `maneuvers` (the jwt-claim policies could never pass without custom JWT claims — same fix already applied to the feedback tables and tenants)
+
+**Notes:**
+- Renaming a maneuver propagates everywhere automatically — Log lesson, Progress, and Students pages read names from the database
+- Add / delete / reorder of maneuvers remains future work (Phase 4 checklist updated)
+
+---
+
+## 🆕 Latest Feature (September 9, 2026) — Lesson vs Exam
+
+### Lesson Type on Scheduled Lessons
+
+**Problem Solved:**
+- A scheduled slot can be a regular lesson or an examination, but there was no way to record or see which
+
+**Solution Implemented:**
+
+1. **Database** (`supabase/migrations/202609090002_add_lesson_kind.sql`):
+   - `lessons.kind` text column — `'lesson'` (default, covers existing rows) or `'exam'`, enforced by a check constraint
+
+2. **API** (`src/lib/api.js`):
+   - `updateLesson` now accepts `kind` (`createLesson` already passes the full payload through)
+
+3. **Lessons page** (`src/pages/LessonsAdminPage.jsx`):
+   - Add/edit lesson modal has a "Type" field (Lesson / Exam)
+   - Scheduled lessons table has a Type column — blue badge for Lesson, warn badge for Exam
+   - Duration column now uses the same 1 hour / 2 hours labels as the form
+
+4. **Translations:** `laKind`, `laKindLesson`, `laKindExam` (en + it)
+
+**Notes:**
+- The Schedule calendar and other pages are untouched — kind currently shows only in the lessons list, as requested
+
+---
+
+## 🆕 Latest Feature (September 9, 2026) — Examiners
+
+### Examiner Directory
+
+**Problem Solved:**
+- Schools need a place to record the examiners who conduct the practical exam, plus free-form notes about each (strictness, preferences, focus areas)
+
+**Solution Implemented:**
+
+1. **Database** (`supabase/migrations/202609090003_add_examiners.sql`):
+   - New `examiners` table — `id`, `tenant_id` (the only relation, to tenants), `name`, `notes` (multi-line), `created_at`
+   - `unique (tenant_id, name)` constraint; RLS intentionally left off (app convention: client-side tenant scoping)
+
+2. **API** (`src/lib/api.js`):
+   - `listExaminers`, `createExaminer`, `updateExaminer`, `deleteExaminer`
+
+3. **New page** (`src/pages/ExaminersPage.jsx`, admin-only):
+   - **Top section:** examiner name list — click a row to select; edit (pencil) and delete (trash) buttons in each row
+   - **Bottom section:** full-width, multi-line notes of the selected examiner (rendered with `whitespace-pre-wrap`)
+   - **Add button** in the page header opens a popup (name + notes textarea) — same modal style as the lessons page; duplicate names are rejected up-front
+   - First examiner auto-selected on load; selection falls back gracefully after delete
+
+4. **Navigation:** "Examiner" entry in the Tools section (`roleAccess.js` + `Layout.jsx` UserCheck icon + `App.jsx` route) — **visible and editable by admins and teachers**
+
+5. **Translations:** `examiner*` / `examiners*` keys (en + it)
+
+**RLS fix** (`supabase/migrations/202609090004_disable_rls_examiners.sql`):
+- If the table was created via the Supabase dashboard it gets RLS enabled with no workable policy, so inserts fail with 42501. This migration disables RLS, matching the app convention (see 202606270001 / 202606280001 / 202609090001).
+
+**UI polish:**
+- Subtitle removed; short "Add" button now sits beside the page title
+- Examiner list capped at ~20vh with its own scrollbar; notes area capped at ~80vh with its own scrollbar

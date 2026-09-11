@@ -38,7 +38,7 @@ export default function DashboardPage({ navigate, t }) {
     return (
       <Page>
         <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Loading…
+          {t.loading}
         </div>
       </Page>
     );

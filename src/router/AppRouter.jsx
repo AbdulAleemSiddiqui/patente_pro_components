@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import useAuthStore from '../store/useAuthStore.js';
 import App from '../App.jsx';
 import LoginPage from '../pages/LoginPage.jsx';
+import en from '../translations/en.json';
 
 function RequireAuth({ children, allowedRoles }) {
   const { session, role, loading } = useAuthStore();
@@ -11,7 +12,7 @@ function RequireAuth({ children, allowedRoles }) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
-        Loading…
+        {en.authLoading}
       </div>
     );
   }

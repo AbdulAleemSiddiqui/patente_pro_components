@@ -180,6 +180,19 @@ export async function listManeuverTypes({ tenantId } = {}) {
   return data;
 }
 
+export async function updateManeuver({ id, name }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('maneuvers')
+    .update({ name })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function listErrorTags({ tenantId } = {}) {
   const client = requireSupabase();
   let query = client.from('error_tags').select('*').order('label');
@@ -215,6 +228,44 @@ export async function deleteHighway({ id }) {
   if (error) throw error;
 }
 
+export async function listExaminers({ tenantId } = {}) {
+  const client = requireSupabase();
+  let query = client.from('examiners').select('*').order('name');
+  query = byTenant(query, tenantId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function createExaminer({ tenantId, name, notes }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('examiners')
+    .insert({ tenant_id: tenantId, name, notes: notes || '' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateExaminer({ id, name, notes }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('examiners')
+    .update({ name, notes: notes || '' })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteExaminer({ id }) {
+  const client = requireSupabase();
+  const { error } = await client.from('examiners').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function createLesson(payload) {
   const client = requireSupabase();
   const { data, error } = await client.from('lessons').insert(payload).select().single();
@@ -222,7 +273,7 @@ export async function createLesson(payload) {
   return data;
 }
 
-export async function updateLesson({ id, scheduled_at, duration_minutes, teacher_id, student_id, status }) {
+export async function updateLesson({ id, scheduled_at, duration_minutes, teacher_id, student_id, status, kind }) {
   const client = requireSupabase();
   const updateData = {};
   if (scheduled_at !== undefined) updateData.scheduled_at = scheduled_at;
@@ -230,6 +281,7 @@ export async function updateLesson({ id, scheduled_at, duration_minutes, teacher
   if (teacher_id !== undefined) updateData.teacher_id = teacher_id;
   if (student_id !== undefined) updateData.student_id = student_id;
   if (status !== undefined) updateData.status = status;
+  if (kind !== undefined) updateData.kind = kind;
 
   const { data, error } = await client
     .from('lessons')

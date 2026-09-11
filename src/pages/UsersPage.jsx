@@ -66,7 +66,7 @@ export default function UsersPage({ showToast, t, lang }) {
     e.preventDefault();
 
     if (!newUser.email || !newUser.fullName || !newUser.password) {
-      showToast('Please fill in all required fields');
+      showToast(t.usersFillRequired);
       return;
     }
 
@@ -84,7 +84,7 @@ export default function UsersPage({ showToast, t, lang }) {
     setCreating(false);
 
     if (result.success) {
-      showToast(`${userType === 'teacher' ? 'Teacher' : 'Student'} created successfully`);
+      showToast(t.usersCreatedSuccess.replace('{role}', userType === 'teacher' ? t.usersTeacherNoun : t.usersStudentNoun));
       handleCloseModal();
 
       // Refresh the user lists
@@ -99,7 +99,7 @@ export default function UsersPage({ showToast, t, lang }) {
         console.error('Failed to refresh users', error);
       }
     } else {
-      showToast(`Failed to create user: ${result.error}`);
+      showToast(t.usersCreateFailed.replace('{error}', result.error));
     }
   };
 
@@ -131,7 +131,7 @@ export default function UsersPage({ showToast, t, lang }) {
     e.preventDefault();
 
     if (!editUser.fullName) {
-      showToast('Please enter a name');
+      showToast(t.usersNameRequired);
       return;
     }
 
@@ -144,7 +144,7 @@ export default function UsersPage({ showToast, t, lang }) {
         phone: editUser.phone,
       });
 
-      showToast('User updated successfully');
+      showToast(t.usersUpdated);
       handleCloseEditModal();
 
       // Refresh the user lists
@@ -156,7 +156,7 @@ export default function UsersPage({ showToast, t, lang }) {
       setStudents(studentsData || []);
     } catch (error) {
       console.error('Failed to update user:', error);
-      showToast(`Failed to update user: ${error.message}`);
+      showToast(t.usersUpdateFailed.replace('{error}', error.message));
     } finally {
       setUpdating(false);
     }
@@ -166,7 +166,7 @@ export default function UsersPage({ showToast, t, lang }) {
     return (
       <Page>
         <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Loading�
+          {t.loading}
         </div>
       </Page>
     );
@@ -191,7 +191,7 @@ export default function UsersPage({ showToast, t, lang }) {
 
       <Card title={t.teachers}>
         <div className="hidden grid-cols-[1.4fr_1.4fr_1fr_1fr_130px] gap-3 border-b border-line px-4 py-2 text-[11px] uppercase tracking-wide text-muted lg:grid">
-          <span>{t.name}</span><span>Email</span><span>Phone</span>
+          <span>{t.name}</span><span>{t.emailLabel}</span><span>{t.phoneLabel}</span>
           <span>{t.status}</span><span>{t.actions}</span>
         </div>
         {teachers.map((teacher) => {
@@ -210,8 +210,8 @@ export default function UsersPage({ showToast, t, lang }) {
                 </div>
               </div>
               <div className="text-muted">{teacher.email}</div>
-              <div className="text-muted">{teacher.phone || 'N/A'}</div>
-              <Badge tone={teacher.is_active ? 'green' : 'warn'}>{teacher.is_active ? t.active : 'inactive'}</Badge>
+              <div className="text-muted">{teacher.phone || t.notApplicable}</div>
+              <Badge tone={teacher.is_active ? 'green' : 'warn'}>{teacher.is_active ? t.active : t.inactive}</Badge>
               <div className="flex gap-1.5">
                 <Button small onClick={() => handleOpenEditModal(teacher)}>{t.edit}</Button>
                 <Button small disabled className="opacity-60">
@@ -246,7 +246,7 @@ export default function UsersPage({ showToast, t, lang }) {
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-medium">
-                Add New {userType === 'teacher' ? 'Teacher' : 'Student'}
+                {t.usersAddNewTitle.replace('{role}', userType === 'teacher' ? t.usersTeacherNoun : t.usersStudentNoun)}
               </h2>
               <button
                 onClick={handleCloseModal}
@@ -257,50 +257,50 @@ export default function UsersPage({ showToast, t, lang }) {
             </div>
 
             <form onSubmit={handleCreateUser} className="space-y-4">
-              <Field label="Full Name *">
+              <Field label={t.usersFullNameRequired}>
                 <input
                   type="text"
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={newUser.fullName}
                   onChange={handleInputChange('fullName')}
-                  placeholder="Enter full name"
+                  placeholder={t.usersFullNamePlaceholder}
                   required
                 />
               </Field>
 
-              <Field label="Email *">
+              <Field label={t.usersEmailRequired}>
                 <input
                   type="email"
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={newUser.email}
                   onChange={handleInputChange('email')}
-                  placeholder="Enter email address"
+                  placeholder={t.usersEmailPlaceholder}
                   required
                 />
               </Field>
 
-              <Field label="Phone (optional)">
+              <Field label={t.usersPhoneOptional}>
                 <input
                   type="tel"
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={newUser.phone}
                   onChange={handleInputChange('phone')}
-                  placeholder="Enter phone number"
+                  placeholder={t.usersPhonePlaceholder}
                 />
               </Field>
 
-              <Field label="Temporary Password *">
+              <Field label={t.usersTempPassword}>
                 <input
                   type="password"
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={newUser.password}
                   onChange={handleInputChange('password')}
-                  placeholder="Enter temporary password"
+                  placeholder={t.usersTempPasswordPlaceholder}
                   required
                   minLength={6}
                 />
                 <p className="mt-1 text-[11px] text-muted">
-                  User will be able to change this after logging in
+                  {t.usersTempPasswordHint}
                 </p>
               </Field>
 
@@ -310,14 +310,14 @@ export default function UsersPage({ showToast, t, lang }) {
                   onClick={handleCloseModal}
                   disabled={creating}
                 >
-                  Cancel
+                  {t.cancel}
                 </Button>
                 <Button
                   type="submit"
                   primary
                   disabled={creating}
                 >
-                  {creating ? 'Creating...' : `Create ${userType === 'teacher' ? 'Teacher' : 'Student'}`}
+                  {creating ? t.usersCreating : t.usersCreateButton.replace('{role}', userType === 'teacher' ? t.usersTeacherNoun : t.usersStudentNoun)}
                 </Button>
               </div>
             </form>
@@ -331,7 +331,7 @@ export default function UsersPage({ showToast, t, lang }) {
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-medium">
-                Edit {editingUser.role === 'teacher' ? 'Teacher' : 'Student'}
+                {t.usersEditTitle.replace('{role}', editingUser.role === 'teacher' ? t.usersTeacherNoun : t.usersStudentNoun)}
               </h2>
               <button
                 onClick={handleCloseEditModal}
@@ -342,24 +342,24 @@ export default function UsersPage({ showToast, t, lang }) {
             </div>
 
             <form onSubmit={handleUpdateUser} className="space-y-4">
-              <Field label="Full Name *">
+              <Field label={t.usersFullNameRequired}>
                 <input
                   type="text"
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={editUser.fullName}
                   onChange={handleEditInputChange('fullName')}
-                  placeholder="Enter full name"
+                  placeholder={t.usersFullNamePlaceholder}
                   required
                 />
               </Field>
 
-              <Field label="Phone">
+              <Field label={t.phoneLabel}>
                 <input
                   type="tel"
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={editUser.phone}
                   onChange={handleEditInputChange('phone')}
-                  placeholder="Enter phone number"
+                  placeholder={t.usersPhonePlaceholder}
                 />
               </Field>
 
@@ -369,14 +369,14 @@ export default function UsersPage({ showToast, t, lang }) {
                   onClick={handleCloseEditModal}
                   disabled={updating}
                 >
-                  Cancel
+                  {t.cancel}
                 </Button>
                 <Button
                   type="submit"
                   primary
                   disabled={updating}
                 >
-                  {updating ? 'Updating...' : 'Save Changes'}
+                  {updating ? t.usersUpdating : t.saveChanges}
                 </Button>
               </div>
             </form>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Calendar, dateFnsLocalizer, Views, momentLocalizer } from 'react-big-calendar';
+import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS, it } from 'date-fns/locale';
 import { Plus, ChevronLeft, ChevronRight, X, Trash2 } from 'lucide-react';
@@ -94,7 +94,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
         setLessons(lessonData || []);
         setStudents(studentData || []);
-        setTeachers([{ id: currentUserId, full_name: 'You' }]);
+        setTeachers([{ id: currentUserId, full_name: t.scYou }]);
         setTeacherAvailability(availabilityData || []);
       } else if (role === 'student') {
         const [lessonData, teacherData] = await Promise.all([
@@ -110,7 +110,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
       setLoading(false);
     } catch (error) {
       console.error('Failed to load schedule data', error);
-      showToast(`Failed to load: ${error.message}`);
+      showToast(t.laFailedLoad.replace('{error}', error.message));
       setLoading(false);
     }
   };
@@ -122,7 +122,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
     return {
       id: lesson.id,
-      title: `${student?.full_name || 'Student'}`,
+      title: `${student?.full_name || t.student}`,
       start: new Date(lesson.scheduled_at),
       end: new Date(new Date(lesson.scheduled_at).getTime() + lesson.duration_minutes * 60000),
       resource: { ...lesson, type: 'lesson' },
@@ -137,7 +137,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
     return {
       id: avail.id,
-      title: `${teacher?.full_name || 'Teacher'} Available`,
+      title: `${teacher?.full_name || t.scTeacherSingular} ${t.scAvailableEvent}`,
       start: new Date(avail.start_at),
       end: new Date(avail.end_at),
       resource: { ...avail, type: 'availability' },
@@ -181,10 +181,6 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     setDate(new Date(newDate));
   };
 
-  const navigateToToday = () => {
-    setDate(new Date());
-  };
-
   const handleNavigate = useCallback((newDate) => {
     setDate(newDate);
   }, []);
@@ -196,7 +192,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
   // Handle clicking on a date slot
   const handleSelectSlot = useCallback(({ start, end }) => {
     if (!isAdmin && role !== 'teacher') {
-      showToast('Only teachers and admins can schedule lessons');
+      showToast(t.scOnlyTeachersAdmins);
       return;
     }
 
@@ -213,7 +209,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     const validDurations = [30, 45, 50, 60, 90, 120];
 
     if (!validDurations.includes(durationMinutes)) {
-      showToast(`Duration: ${durationMinutes}min is not allowed. Use: 30, 45, 50, 60, 90, or 120 minutes.`);
+      showToast(t.scInvalidDuration.replace('{duration}', durationMinutes));
       return;
     }
 
@@ -249,7 +245,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     if (role === 'teacher' && event.resource.teacher_id === currentUserId) {
       // Completed lessons already have feedback logged — block re-submitting
       if (event.resource.status === 'completed') {
-        showToast('Feedback already submitted for this lesson');
+        showToast(t.scFeedbackAlreadySubmitted);
         return;
       }
       // Allow feedback for scheduled lessons (not cancelled)
@@ -257,7 +253,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
         setLessonForFeedback(event);
         setShowFeedbackModal(true);
       } else {
-        showToast('Cannot give feedback for cancelled lessons');
+        showToast(t.scNoFeedbackCancelled);
       }
       return;
     }
@@ -318,7 +314,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     const validDurations = [30, 45, 50, 60, 90, 120];
 
     if (!validDurations.includes(durationMinutes)) {
-      showToast(`Duration: ${durationMinutes}min is not allowed. Use: 30, 45, 50, 60, 90, or 120 minutes.`);
+      showToast(t.scInvalidDuration.replace('{duration}', durationMinutes));
       handleCloseModal();
       return;
     }
@@ -347,7 +343,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     // Find the availability being deleted
     const availability = teacherAvailability.find(a => a.id === id);
     if (!availability) {
-      showToast('Availability not found');
+      showToast(t.scAvailabilityNotFound);
       return;
     }
 
@@ -368,7 +364,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
         const student = students.find(s => s.id === l.student_id);
         return {
           lessonId: l.id,
-          studentName: student?.full_name || 'A student',
+          studentName: student?.full_name || t.scAStudent,
           scheduledAt: new Date(l.scheduled_at),
           duration: l.duration_minutes,
         };
@@ -386,14 +382,14 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     // No conflicts, proceed with deletion
     try {
       await deleteTeacherAvailability({ id });
-      showToast('Availability deleted');
+      showToast(t.laAvailabilityDeleted);
       if (showAvailabilityModal) {
         handleCloseModal();
       }
       await loadScheduleData();
     } catch (error) {
       console.error('Failed to delete availability:', error);
-      showToast(`Failed to delete: ${error.message}`);
+      showToast(t.laFailedDelete.replace('{error}', error.message));
     }
   };
 
@@ -401,15 +397,15 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
   const handleDeleteLesson = async () => {
     if (!selectedEvent?.id) return;
 
-    if (confirm('Are you sure you want to delete this lesson?')) {
+    if (confirm(t.scConfirmDeleteLesson)) {
       try {
         await deleteLesson({ id: selectedEvent.id });
-        showToast('Lesson deleted');
+        showToast(t.laLessonDeleted);
         handleCloseModal();
         await loadScheduleData();
       } catch (error) {
         console.error('Failed to delete lesson:', error);
-        showToast(`Failed to delete: ${error.message}`);
+        showToast(t.laFailedDelete.replace('{error}', error.message));
       }
     }
   };
@@ -440,12 +436,12 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     const teacherId = availabilityData.teacherId?.trim();
 
     if (!teacherId || teacherId === '') {
-      showToast('Please select a teacher');
+      showToast(t.laSelectTeacher);
       return;
     }
 
     if (!tenantId) {
-      showToast('Authentication error: No tenant found');
+      showToast(t.scAuthNoTenant);
       return;
     }
 
@@ -462,12 +458,12 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
         endAt: slotInfo.end.toISOString(),
       });
 
-      showToast(selectedEvent ? 'Availability updated successfully' : 'Availability added successfully');
+      showToast(selectedEvent ? t.scAvailabilityUpdated : t.scAvailabilityAdded);
       handleCloseModal();
       await loadScheduleData();
     } catch (error) {
       console.error('Failed to save availability:', error);
-      showToast(`Failed to save: ${error.message}`);
+      showToast(t.laFailedSave.replace('{error}', error.message));
     }
   };
 
@@ -520,12 +516,12 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
   // Handle create/update lesson
   const handleSaveLesson = async () => {
     if (!lessonData.studentId) {
-      showToast('Please select a student');
+      showToast(t.laSelectStudent);
       return;
     }
 
     if (!lessonData.teacherId) {
-      showToast('Please select a teacher');
+      showToast(t.laSelectTeacher);
       return;
     }
 
@@ -544,7 +540,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
       });
 
       if (!hasAvailability) {
-        showToast('Selected teacher is not available for the entire lesson duration');
+        showToast(t.scTeacherUnavailableEntire);
         return;
       }
     }
@@ -570,7 +566,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
           duration_minutes: lessonData.duration_minutes,
         });
 
-        showToast('Lesson updated successfully');
+        showToast(t.scLessonUpdated);
       } else {
         // Create new lesson
         const scheduledAt = slotInfo?.start || new Date();
@@ -584,14 +580,14 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
           status: 'scheduled',
         });
 
-        showToast('Lesson scheduled successfully');
+        showToast(t.scLessonScheduled);
       }
 
       handleCloseModal();
       await loadScheduleData();
     } catch (error) {
       console.error('Failed to save lesson:', error);
-      showToast(`Failed to save: ${error.message}`);
+      showToast(t.laFailedSave.replace('{error}', error.message));
     }
   };
 
@@ -644,7 +640,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
       return (
         <div className={`h-full rounded ${completedContainer} p-1.5 text-xs overflow-hidden`}>
           <div className="truncate font-medium line-through">
-            {student?.full_name?.split(' ')[0] || 'Student'}
+            {student?.full_name?.split(' ')[0] || t.student}
           </div>
           {view !== 'month' && (
             <div className="truncate text-[10px] opacity-90">
@@ -658,7 +654,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     return (
       <div className={`h-full rounded ${eventColor} p-1.5 text-xs overflow-hidden ${isAvailability ? 'opacity-80 border-l-2 border-current' : ''}`}>
         <div className="truncate opacity-90 font-medium">
-          {isAvailability ? (teacher?.full_name?.split(' ')[0] || 'Available') : (student?.full_name?.split(' ')[0] || 'Student')}
+          {isAvailability ? (teacher?.full_name?.split(' ')[0] || t.scAvailableEvent) : (student?.full_name?.split(' ')[0] || t.student)}
         </div>
         {view !== 'month' && !isAvailability && (
           <div className="truncate text-[10px] opacity-75">
@@ -667,7 +663,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
         )}
         {isAvailability && view !== 'month' && (
           <div className="truncate text-[10px] opacity-75">
-            Available
+            {t.scAvailableEvent}
           </div>
         )}
       </div>
@@ -715,14 +711,14 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
       {dayLessonCount > 0 && (
         <div className={`mt-0.5`}>
           <div className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeColor}`}>
-            {dayLessonCount} {dayLessonCount === 1 ? (t.lesson || 'Lesson') : (t.lessons || 'Lessons')}
+            {dayLessonCount} {dayLessonCount === 1 ? t.lesson : t.lessons}
           </div>
         </div>
       )}
       {distinctTeacherCount > 0 && (
         <div className={`mt-0.5`}>
           <div className={`text-xs font-medium px-2 py-0.5 rounded-full bg-gray-200 text-gray-700`}>
-            {distinctTeacherCount} {distinctTeacherCount === 1 ? 'Teacher' : 'Teachers'}
+            {distinctTeacherCount} {distinctTeacherCount === 1 ? t.scTeacherSingular : t.scTeacherPlural}
           </div>
         </div>
       )}
@@ -739,25 +735,18 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
             type="button"
             onClick={navigateToPrev}
             className="p-1.5 rounded hover:bg-gray-100 transition"
-            title={t.previous || 'Previous'}
+            title={t.previous}
           >
             <ChevronLeft size={18} />
           </button>
-          {/* <button
-            type="button"
-            onClick={navigateToToday}
-            className="px-3 py-1.5 text-sm rounded hover:bg-gray-100 font-medium transition"
-          >
-            {t.today || 'Today'}
-          </button> */}
-        
+
           <span className="text-lg font-medium">{label}</span>
 
             <button
             type="button"
             onClick={navigateToNext}
             className="p-1.5 rounded hover:bg-gray-100 transition"
-            title={t.next || 'Next'}
+            title={t.next}
           >
             <ChevronRight size={18} />
           </button>
@@ -770,7 +759,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
               value={selectedTeacher}
               onChange={(e) => setSelectedTeacher(e.target.value)}
             >
-              <option value="all">{t.allTeachers || 'All Teachers'}</option>
+              <option value="all">{t.allTeachers}</option>
               {teachers.map((teacher) => (
                 <option key={teacher.id} value={teacher.id}>
                   {teacher.full_name}
@@ -804,7 +793,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
     return (
       <Page>
         <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Loading...
+          {t.loading}
         </div>
       </Page>
     );
@@ -813,8 +802,8 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
   return (
     <Page>
       <PageHeader
-        title={role === 'student' ? 'My Schedule' : t.lessonSchedule}
-        subtitle={role === 'student' ? 'View your upcoming lessons' : t.lessonScheduleSub}
+        title={role === 'student' ? t.scMySchedule : t.lessonSchedule}
+        subtitle={role === 'student' ? t.scMyScheduleSub : t.lessonScheduleSub}
         action={
           (isAdmin || role === 'teacher') && (
             <Button primary onClick={() => {
@@ -856,9 +845,9 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
               },
             }}
             messages={{
-              date: t.date || 'Date',
-              time: t.time || 'Time',
-              event: t.event || 'Event',
+              date: t.date,
+              time: t.time,
+              event: t.event,
             }}
             formats={{
               monthHeaderFormat: 'MMMM yyyy',
@@ -873,11 +862,8 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                 return `${format(start, formatStr, { locale: lang === 'it' ? it : enUS })} – ${format(end, formatStr, { locale: lang === 'it' ? it : enUS })}`;
               },
               dateFormat: 'MMM d, yyyy',
-              timeGutterFormat: 'ha',
             }}
             className="w-full"
-            startAccessor="start"
-            endAccessor="end"
             style={{
               height: view === Views.MONTH ? 'auto' : 700,
               minHeight: 500,
@@ -891,7 +877,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
         <Card>
           <div className="p-4">
             <div className="text-2xl font-medium">{filteredEvents.length}</div>
-            <div className="text-sm text-muted">Total Lessons</div>
+            <div className="text-sm text-muted">{t.totalLessons}</div>
           </div>
         </Card>
         <Card>
@@ -899,7 +885,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
             <div className="text-2xl font-medium">
               {filteredEvents.filter(e => e.resource.status === 'scheduled').length}
             </div>
-            <div className="text-sm text-muted">Scheduled</div>
+            <div className="text-sm text-muted">{t.scheduled}</div>
           </div>
         </Card>
         <Card>
@@ -907,7 +893,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
             <div className="text-2xl font-medium">
               {filteredEvents.filter(e => e.resource.status === 'completed').length}
             </div>
-            <div className="text-sm text-muted">Completed</div>
+            <div className="text-sm text-muted">{t.completed}</div>
           </div>
         </Card>
       </div>
@@ -917,9 +903,9 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4">
-              <h2 className="text-lg font-medium">What would you like to add?</h2>
+              <h2 className="text-lg font-medium">{t.scWhatToAdd}</h2>
               <p className="text-sm text-muted mt-1">
-                Selected: {format(slotInfo?.start || new Date(), 'MMM d, h:mma')} - {format(slotInfo?.end || new Date(), 'h:mma')}
+                {t.scSelected} {format(slotInfo?.start || new Date(), 'MMM d, h:mma')} - {format(slotInfo?.end || new Date(), 'h:mma')}
               </p>
             </div>
 
@@ -928,21 +914,21 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                 onClick={handleChooseScheduleLesson}
                 className="w-full rounded-md border border-line bg-white px-4 py-3 text-left hover:bg-gray-50 transition"
               >
-                <div className="font-medium">Schedule a Lesson</div>
-                <div className="text-sm text-muted">Book a lesson for a student with a teacher</div>
+                <div className="font-medium">{t.scScheduleLessonTitle}</div>
+                <div className="text-sm text-muted">{t.scScheduleLessonDesc}</div>
               </button>
 
               <button
                 onClick={handleChooseAddAvailability}
                 className="w-full rounded-md border border-line bg-white px-4 py-3 text-left hover:bg-gray-50 transition"
               >
-                <div className="font-medium">Add Teacher Availability</div>
-                <div className="text-sm text-muted">Set when a teacher is available for lessons</div>
+                <div className="font-medium">{t.scAddAvailabilityTitle}</div>
+                <div className="text-sm text-muted">{t.scAddAvailabilityDesc}</div>
               </button>
 
               <div className="flex justify-end pt-2">
                 <Button onClick={handleCloseModal}>
-                  Cancel
+                  {t.cancel}
                 </Button>
               </div>
             </div>
@@ -956,7 +942,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-medium">
-                {selectedEvent ? 'Edit Teacher Availability' : 'Add Teacher Availability'}
+                {selectedEvent ? t.scEditAvailability : t.scAddAvailabilityTitle}
               </h2>
               <button
                 onClick={handleCloseModal}
@@ -972,14 +958,14 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
               </div>
 
               <div>
-                <label className="block text-xs text-muted mb-1">Teacher *</label>
+                <label className="block text-xs text-muted mb-1">{t.scTeacherSingular} *</label>
                 <select
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={availabilityData.teacherId}
                   onChange={(e) => setAvailabilityData({ ...availabilityData, teacherId: e.target.value })}
                   required
                 >
-                  <option value="">Select a teacher</option>
+                  <option value="">{t.laSelectTeacherPlaceholder}</option>
                   {teachers.map((teacher) => (
                     <option key={teacher.id} value={teacher.id}>
                       {teacher.full_name}
@@ -992,14 +978,14 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                 {selectedEvent && (
                   <Button onClick={() => handleDeleteAvailability(selectedEvent.id)} className="border-red-300 text-red-600 hover:bg-red-50">
                     <Trash2 size={14} />
-                    Delete
+                    {t.laDelete}
                   </Button>
                 )}
                 <Button onClick={handleCloseModal}>
-                  Cancel
+                  {t.cancel}
                 </Button>
                 <Button primary onClick={handleSaveAvailability}>
-                  Save Availability
+                  {t.scSaveAvailability}
                 </Button>
               </div>
             </div>
@@ -1012,7 +998,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-medium text-orange-600">Cannot Delete Availability</h2>
+              <h2 className="text-lg font-medium text-orange-600">{t.scCannotDeleteAvailability}</h2>
               <button
                 onClick={handleCloseModal}
                 className="rounded p-1 text-muted transition hover:bg-gray-100"
@@ -1024,7 +1010,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
             <div className="space-y-4">
               <div className="text-sm">
                 <p className="font-medium text-ink mb-2">
-                  You have {conflictInfo.count} lesson{conflictInfo.count === 1 ? '' : 's'} scheduled during this availability period:
+                  {(conflictInfo.count === 1 ? t.scConflictIntroOne : t.scConflictIntroMany).replace('{count}', conflictInfo.count)}
                 </p>
                 <div className="bg-orange-50 border border-orange-200 rounded-md p-3 space-y-2">
                   {conflictInfo.lessons.map((lesson, index) => (
@@ -1039,12 +1025,12 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
               </div>
 
               <div className="text-sm text-muted">
-                Please reschedule or cancel these lessons first, then try deleting the availability again.
+                {t.scConflictResolve}
               </div>
 
               <div className="flex justify-end pt-2">
                 <Button primary onClick={handleCloseModal}>
-                  OK, I Understand
+                  {t.scOkUnderstand}
                 </Button>
               </div>
             </div>
@@ -1057,7 +1043,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-medium">Give Lesson Feedback</h2>
+              <h2 className="text-lg font-medium">{t.scGiveFeedbackTitle}</h2>
               <button
                 onClick={handleCloseModal}
                 className="rounded p-1 text-muted transition hover:bg-gray-100"
@@ -1069,15 +1055,15 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
             <div className="space-y-4">
               <div className="text-sm">
                 <p className="font-medium text-ink mb-2">
-                  Do you want to give feedback for this lesson?
+                  {t.scFeedbackQuestion}
                 </p>
                 <div className="bg-gray-50 border border-line rounded-md p-3">
                   <div className="text-sm">
-                    <div className="text-muted text-xs">Student</div>
-                    <div className="font-medium">{lessonForFeedback.student?.full_name || 'Student'}</div>
+                    <div className="text-muted text-xs">{t.student}</div>
+                    <div className="font-medium">{lessonForFeedback.student?.full_name || t.student}</div>
                   </div>
                   <div className="mt-2 text-sm">
-                    <div className="text-muted text-xs">Date & Time</div>
+                    <div className="text-muted text-xs">{t.date} & {t.time}</div>
                     <div className="font-medium">
                       {format(new Date(lessonForFeedback.resource.scheduled_at), 'MMM d, yyyy h:mma')}
                     </div>
@@ -1088,10 +1074,10 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
               <div className="flex justify-end gap-3 pt-2">
                 <Button onClick={handleCloseModal}>
-                  Cancel
+                  {t.cancel}
                 </Button>
                 <Button primary onClick={handleGiveFeedback}>
-                  Yes, Give Feedback
+                  {t.scYesGiveFeedback}
                 </Button>
               </div>
             </div>
@@ -1105,7 +1091,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-medium">
-                {selectedEvent ? 'Edit Lesson' : 'Schedule New Lesson'}
+                {selectedEvent ? t.laEditLesson : t.scScheduleNewLesson}
               </h2>
               <button
                 onClick={handleCloseModal}
@@ -1122,11 +1108,11 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                   <>
                     {selectedEvent?.resource?.status === 'completed' && (
                       <div className="text-xs text-muted bg-gray-50 border border-line rounded-md p-2">
-                        This lesson is already logged — timing can no longer be changed.
+                        {t.scAlreadyLogged}
                       </div>
                     )}
                     <div>
-                      <label className="block text-xs text-muted mb-1">Start Date & Time *</label>
+                      <label className="block text-xs text-muted mb-1">{t.scStartDateTime}</label>
                       <input
                         type="datetime-local"
                         className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid disabled:bg-gray-100 disabled:text-muted disabled:cursor-not-allowed"
@@ -1142,7 +1128,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-muted mb-1">Duration *</label>
+                      <label className="block text-xs text-muted mb-1">{t.duration} *</label>
                       <select
                         className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid disabled:bg-gray-100 disabled:text-muted disabled:cursor-not-allowed"
                         value={lessonData.duration_minutes}
@@ -1157,7 +1143,7 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                       </select>
                     </div>
                     <div className="text-sm text-muted bg-gray-50 p-2 rounded">
-                      End time: {lessonData.startAt && lessonData.duration_minutes ?
+                      {t.scEndTimeColon} {lessonData.startAt && lessonData.duration_minutes ?
                         format(new Date(new Date(lessonData.startAt).getTime() + lessonData.duration_minutes * 60000), 'MMM d, yyyy h:mma')
                         : '—'}
                     </div>
@@ -1178,14 +1164,14 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
               )}
 
               <div>
-                <label className="block text-xs text-muted mb-1">Student *</label>
+                <label className="block text-xs text-muted mb-1">{t.student} *</label>
                 <select
                   className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                   value={lessonData.studentId}
                   onChange={(e) => setLessonData({ ...lessonData, studentId: e.target.value })}
                   required
                 >
-                  <option value="">Select a student</option>
+                  <option value="">{t.laSelectStudentPlaceholder}</option>
                   {students.map((student) => (
                     <option key={student.id} value={student.id}>
                       {student.full_name}
@@ -1196,14 +1182,14 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
 
               {isAdmin && (
                 <div>
-                  <label className="block text-xs text-muted mb-1">Teacher *</label>
+                  <label className="block text-xs text-muted mb-1">{t.scTeacherSingular} *</label>
                   <select
                     className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid"
                     value={lessonData.teacherId}
                     onChange={(e) => setLessonData({ ...lessonData, teacherId: e.target.value })}
                     required
                   >
-                    <option value="">Select a teacher</option>
+                    <option value="">{t.laSelectTeacherPlaceholder}</option>
                     {getAvailableTeachersForSlot().map((teacher) => (
                       <option key={teacher.id} value={teacher.id}>
                         {teacher.full_name}
@@ -1211,11 +1197,11 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                     ))}
                   </select>
                   {slotInfo && getAvailableTeachersForSlot().length === 0 && (
-                    <p className="text-xs text-orange-600 mt-1">No teachers available for this time slot</p>
+                    <p className="text-xs text-orange-600 mt-1">{t.laNoTeachersForSlot}</p>
                   )}
                   {slotInfo && getAvailableTeachersForSlot().length > 0 && getAvailableTeachersForSlot().length < teachers.length && (
                     <p className="text-xs text-muted mt-1">
-                      Showing {getAvailableTeachersForSlot().length} of {teachers.length} teachers (others unavailable or have conflicts)
+                      {t.laShowingTeachers.replace('{shown}', getAvailableTeachersForSlot().length).replace('{total}', teachers.length)}
                     </p>
                   )}
                 </div>
@@ -1225,14 +1211,14 @@ export default function SchedulePage({ showToast, t, lang, navigate }) {
                 {selectedEvent && (
                   <Button onClick={handleDeleteLesson} className="border-red-300 text-red-600 hover:bg-red-50">
                     <Trash2 size={14} />
-                    Delete
+                    {t.laDelete}
                   </Button>
                 )}
                 <Button onClick={handleCloseModal}>
-                  Cancel
+                  {t.cancel}
                 </Button>
                 <Button primary onClick={handleSaveLesson}>
-                  {selectedEvent ? 'Update' : 'Schedule'} Lesson
+                  {selectedEvent ? t.scUpdateLesson : t.scScheduleLessonAction}
                 </Button>
               </div>
             </div>

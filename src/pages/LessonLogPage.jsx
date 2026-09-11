@@ -158,7 +158,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
   const handleSubmit = async () => {
     try {
       if (!selectedLesson?.id) {
-        showToast('Select a lesson first', 'error');
+        showToast(t.llSelectLessonFirst, 'error');
         return;
       }
 
@@ -180,12 +180,12 @@ export default function LessonLogPage({ showToast, t, navigate }) {
         maneuverRatings: maneuverRatingsData,
       });
 
-      showToast('Feedback saved successfully!');
+      showToast(t.llFeedbackSaved);
       sessionStorage.removeItem('feedbackLesson');
       navigate(prefilled ? 'schedule' : 'dashboard');
     } catch (error) {
       console.error('Failed to save feedback:', error);
-      showToast('Failed to save feedback', 'error');
+      showToast(t.llFeedbackSaveFailed, 'error');
     }
   };
 
@@ -193,7 +193,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
     return (
       <Page>
         <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Loading...
+          {t.loadingDots}
         </div>
       </Page>
     );
@@ -227,7 +227,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
             <div className="flex flex-col gap-3 p-4">
               {prefilled && selectedLesson?.teacherName && (
                 <div className="mb-2">
-                  <div className="text-xs text-muted mb-1">Instructor</div>
+                  <div className="text-xs text-muted mb-1">{t.llInstructorLabel}</div>
                   <div className="text-sm font-medium">{selectedLesson.teacherName}</div>
                 </div>
               )}
@@ -239,7 +239,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                   onChange={(e) => handleStudentChange(e.target.value)}
                   disabled={prefilled}
                 >
-                  <option value="">Select a student</option>
+                  <option value="">{t.llSelectStudent}</option>
                   {students.map((student) => (
                     <option key={student.id} value={student.id}>
                       {student.full_name}
@@ -248,7 +248,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                 </select>
               </Field>
 
-              <Field label="Lesson">
+              <Field label={t.llLessonLabel}>
                 <select
                   className={fieldClass}
                   value={selectedLesson?.id || ''}
@@ -256,7 +256,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                   disabled={prefilled || !studentId || loadingLessons}
                 >
                   <option value="">
-                    {loadingLessons ? 'Loading...' : !studentId ? 'Select a student first' : 'Select a lesson'}
+                    {loadingLessons ? t.loadingDots : !studentId ? t.llSelectStudentFirst : t.llSelectLesson}
                   </option>
                   {prefilled && selectedLesson ? (
                     <option value={selectedLesson.id}>{formatLessonLabel(selectedLesson)}</option>
@@ -339,7 +339,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                             : { boxShadow: '0 0 8px rgba(34, 197, 94, 0.6), 0 0 4px rgba(34, 197, 94, 0.4)' }
                           : { boxShadow: '0 0 4px rgba(0, 0, 0, 0.1)' }
                       }
-                      title={rating.charAt(0).toUpperCase() + rating.slice(1)}
+                      title={rating === 'poor' ? t.llRatingPoor : rating === 'fair' ? t.llRatingFair : t.llRatingGood}
                     />
                   ))}
                 </div>
@@ -367,12 +367,12 @@ export default function LessonLogPage({ showToast, t, navigate }) {
 
         {/* Right Column - Manoeuvres */}
         <div className="lg:col-span-2 space-y-4">
-          <Card title="TIPOLOGIA">
+          <Card title={t.tipologia}>
             <div className="p-4">
               {!lessonLocked ? (
-                <div className="text-sm text-muted py-4">Select a lesson to evaluate manoeuvres</div>
+                <div className="text-sm text-muted py-4">{t.llSelectLessonToEvaluate}</div>
               ) : manoeuvres.length === 0 ? (
-                <div className="text-sm text-muted py-4">No manoeuvres available</div>
+                <div className="text-sm text-muted py-4">{t.llNoManoeuvres}</div>
               ) : (
                 <div className="space-y-3">
                   {Object.entries(getManoeuvresByType()).map(([typeName, items]) => {
@@ -426,7 +426,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                                           : '0 0 8px rgba(34, 197, 94, 0.6), 0 0 4px rgba(34, 197, 94, 0.4)'
                                         : '0 0 4px rgba(0, 0, 0, 0.1)'
                                     }}
-                                    title={rating.charAt(0).toUpperCase() + rating.slice(1)}
+                                    title={rating === 'poor' ? t.llRatingPoor : rating === 'fair' ? t.llRatingFair : t.llRatingGood}
                                   />
                                 ))}
                               </div>
@@ -441,14 +441,14 @@ export default function LessonLogPage({ showToast, t, navigate }) {
             </div>
           </Card>
 
-          <Card title="Summary">
+          <Card title={t.llSummary}>
             <div className="p-4 text-sm text-muted">
               <div className="flex justify-between mb-2">
-                <span>Selected Manoeuvres:</span>
+                <span>{t.llSelectedManoeuvres}</span>
                 <span className="font-medium">{selectedManoeuvres.size}</span>
               </div>
               <div className="flex justify-between">
-                <span>General Rating:</span>
+                <span>{t.llGeneralRatingColon}</span>
                 <span className="font-medium capitalize">{generalRating}</span>
               </div>
             </div>

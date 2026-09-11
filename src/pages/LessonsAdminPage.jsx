@@ -10,7 +10,12 @@ import {
   listTeacherAvailability, createTeacherAvailability, deleteTeacherAvailability,
 } from '../lib/api.js';
 
-const DURATIONS = [30, 45, 50, 60, 90, 120];
+// Only 1-hour and 2-hour lessons are bookable from this page for now.
+const DURATIONS = [60, 120];
+
+// Label supported lengths as hours; any legacy duration (edit flow) as minutes
+const durationLabel = (d, t) =>
+  d === 60 ? t.durationHour : d === 120 ? t.duration2Hours : `${d} min`;
 
 // Format an ISO date for a datetime-local input (YYYY-MM-DDTHH:mm), local time
 function toLocalInput(iso) {
@@ -35,6 +40,7 @@ const emptyLesson = () => ({
   studentId: '',
   startAt: '',
   duration_minutes: 60,
+  kind: 'lesson',
 });
 
 const emptyAvailability = () => ({ teacherId: '', startAt: '', endAt: '' });
@@ -78,7 +84,7 @@ export default function LessonsAdminPage({ showToast, t }) {
       setStudents(studentData || []);
     } catch (error) {
       console.error('Failed to load lessons/availability', error);
-      showToast(`Failed to load: ${error.message}`);
+      showToast(t.laFailedLoad.replace('{error}', error.message));
     } finally {
       setLoading(false);
     }
@@ -106,6 +112,7 @@ export default function LessonsAdminPage({ showToast, t }) {
       studentId: lesson.student_id,
       startAt: toLocalInput(lesson.scheduled_at),
       duration_minutes: lesson.duration_minutes,
+      kind: lesson.kind || 'lesson',
     });
   };
 
@@ -140,17 +147,23 @@ export default function LessonsAdminPage({ showToast, t }) {
   const prerequisitesMet = !!(lessonModal?.startAt && lessonModal?.duration_minutes && lessonModal?.studentId);
   const availableTeachers = getAvailableTeachersForSlot();
 
+  // When editing a legacy lesson whose duration is outside DURATIONS, keep that
+  // value visible in the dropdown so the form doesn't silently change it on save.
+  const durationOptions = [
+    ...new Set([Number(lessonModal?.duration_minutes), ...DURATIONS].filter(Boolean)),
+  ].sort((a, b) => a - b);
+
   const saveLesson = async () => {
     const draft = lessonModal;
-    if (!draft.startAt) return showToast('Please select a start date & time');
-    if (!draft.duration_minutes) return showToast('Please select a duration');
-    if (!draft.studentId) return showToast('Please select a student');
-    if (!draft.teacherId) return showToast('Please select a teacher');
+    if (!draft.startAt) return showToast(t.laSelectStart);
+    if (!draft.duration_minutes) return showToast(t.laSelectDuration);
+    if (!draft.studentId) return showToast(t.laSelectStudent);
+    if (!draft.teacherId) return showToast(t.laSelectTeacher);
 
     // Final guard: the chosen teacher must still be available for this slot
     const available = getAvailableTeachersForSlot();
     if (!available.some((tc) => tc.id === draft.teacherId)) {
-      return showToast('Selected teacher is not available for this slot');
+      return showToast(t.laTeacherUnavailable);
     }
 
     try {
@@ -159,33 +172,34 @@ export default function LessonsAdminPage({ showToast, t }) {
         student_id: draft.studentId,
         scheduled_at: new Date(draft.startAt).toISOString(),
         duration_minutes: Number(draft.duration_minutes),
+        kind: draft.kind || 'lesson',
         // status is auto-computed by the backend
       };
 
       if (draft.id) {
         await updateLesson({ id: draft.id, ...payload });
-        showToast('Lesson updated');
+        showToast(t.laLessonUpdated);
       } else {
         await createLesson({ tenant_id: tenantId, ...payload });
-        showToast('Lesson created');
+        showToast(t.laLessonCreated);
       }
       setLessonModal(null);
       await loadData();
     } catch (error) {
       console.error('Failed to save lesson', error);
-      showToast(`Failed to save: ${error.message}`);
+      showToast(t.laFailedSave.replace('{error}', error.message));
     }
   };
 
   const removeLesson = async (id) => {
-    if (!confirm('Delete this lesson?')) return;
+    if (!confirm(t.laConfirmDeleteLesson)) return;
     try {
       await deleteLesson({ id });
-      showToast('Lesson deleted');
+      showToast(t.laLessonDeleted);
       await loadData();
     } catch (error) {
       console.error('Failed to delete lesson', error);
-      showToast(`Failed to delete: ${error.message}`);
+      showToast(t.laFailedDelete.replace('{error}', error.message));
     }
   };
 
@@ -194,10 +208,10 @@ export default function LessonsAdminPage({ showToast, t }) {
 
   const saveAvailability = async () => {
     const draft = availModal;
-    if (!draft.teacherId) return showToast('Please select a teacher');
-    if (!draft.startAt || !draft.endAt) return showToast('Please select start and end');
+    if (!draft.teacherId) return showToast(t.laSelectTeacher);
+    if (!draft.startAt || !draft.endAt) return showToast(t.laSelectStartEnd);
     if (new Date(draft.endAt) <= new Date(draft.startAt)) {
-      return showToast('End must be after start');
+      return showToast(t.laEndAfterStart);
     }
 
     try {
@@ -207,31 +221,31 @@ export default function LessonsAdminPage({ showToast, t }) {
         startAt: new Date(draft.startAt).toISOString(),
         endAt: new Date(draft.endAt).toISOString(),
       });
-      showToast('Availability added');
+      showToast(t.laAvailabilityAdded);
       setAvailModal(null);
       await loadData();
     } catch (error) {
       console.error('Failed to save availability', error);
-      showToast(`Failed to save: ${error.message}`);
+      showToast(t.laFailedSave.replace('{error}', error.message));
     }
   };
 
   const removeAvailability = async (id) => {
-    if (!confirm('Delete this availability block?')) return;
+    if (!confirm(t.laConfirmDeleteAvailability)) return;
     try {
       await deleteTeacherAvailability({ id });
-      showToast('Availability deleted');
+      showToast(t.laAvailabilityDeleted);
       await loadData();
     } catch (error) {
       console.error('Failed to delete availability', error);
-      showToast(`Failed to delete: ${error.message}`);
+      showToast(t.laFailedDelete.replace('{error}', error.message));
     }
   };
 
   if (loading) {
     return (
       <Page>
-        <div className="flex items-center justify-center py-12 text-sm text-muted">Loading...</div>
+        <div className="flex items-center justify-center py-12 text-sm text-muted">{t.loading}</div>
       </Page>
     );
   }
@@ -239,18 +253,18 @@ export default function LessonsAdminPage({ showToast, t }) {
   return (
     <Page>
       <PageHeader
-        title={t.lessonsAdminTitle || 'Lessons & Availability'}
-        subtitle={t.lessonsAdminSub || 'Manage scheduled lessons and teacher availability'}
+        title={t.lessonsAdminTitle}
+        subtitle={t.lessonsAdminSub}
         action={
           tab === 'lessons' ? (
             <Button primary onClick={openCreateLesson}>
               <Plus size={16} />
-              {t.addLesson || 'Add lesson'}
+              {t.addLesson}
             </Button>
           ) : (
             <Button primary onClick={openCreateAvailability}>
               <Plus size={16} />
-              {t.addAvailability || 'Add availability'}
+              {t.addAvailability}
             </Button>
           )
         }
@@ -259,8 +273,8 @@ export default function LessonsAdminPage({ showToast, t }) {
       {/* Tabs */}
       <div className="mb-4 flex rounded-md border border-line bg-white p-0.5 w-fit">
         {[
-          { key: 'lessons', label: t.tabLessons || 'Lessons' },
-          { key: 'availability', label: t.tabAvailability || 'Availability' },
+          { key: 'lessons', label: t.tabLessons },
+          { key: 'availability', label: t.tabAvailability },
         ].map((tb) => (
           <button
             key={tb.key}
@@ -281,19 +295,20 @@ export default function LessonsAdminPage({ showToast, t }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
-                  <th className="px-4 py-2.5 font-medium">{t.student || 'Student'}</th>
-                  <th className="px-4 py-2.5 font-medium">{t.teacher || 'Instructor'}</th>
-                  <th className="px-4 py-2.5 font-medium">{t.date || 'Date'} & {t.time || 'Time'}</th>
-                  <th className="px-4 py-2.5 font-medium">{t.duration || 'Duration'}</th>
-                  <th className="px-4 py-2.5 font-medium">{t.status || 'Status'}</th>
-                  <th className="px-4 py-2.5 font-medium text-right">{t.actions || 'Actions'}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.student}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.teacher}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.date} & {t.time}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.duration}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.laKind}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.status}</th>
+                  <th className="px-4 py-2.5 font-medium text-right">{t.actions}</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedLessons.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                      {t.noLessonsAdmin || 'No lessons yet'}
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted">
+                      {t.noLessonsAdmin}
                     </td>
                   </tr>
                 ) : (
@@ -302,23 +317,28 @@ export default function LessonsAdminPage({ showToast, t }) {
                       <td className="px-4 py-2.5">{nameById(students, lesson.student_id)}</td>
                       <td className="px-4 py-2.5">{nameById(teachers, lesson.teacher_id)}</td>
                       <td className="px-4 py-2.5">{fmtDateTime(lesson.scheduled_at)}</td>
-                      <td className="px-4 py-2.5">{lesson.duration_minutes} min</td>
+                      <td className="px-4 py-2.5">{durationLabel(lesson.duration_minutes, t)}</td>
                       <td className="px-4 py-2.5">
-                        <Badge tone={statusTone[lesson.status] || 'blue'}>{lesson.status}</Badge>
+                        <Badge tone={lesson.kind === 'exam' ? 'warn' : 'blue'}>
+                          {lesson.kind === 'exam' ? t.laKindExam : t.laKindLesson}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge tone={statusTone[lesson.status] || 'blue'}>{t[lesson.status] || lesson.status}</Badge>
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEditLesson(lesson)}
                             className="rounded p-1.5 text-muted hover:bg-gray-100 hover:text-ink"
-                            title={t.edit || 'Edit'}
+                            title={t.edit}
                           >
                             <Pencil size={15} />
                           </button>
                           <button
                             onClick={() => removeLesson(lesson.id)}
                             className="rounded p-1.5 text-muted hover:bg-red-50 hover:text-accent"
-                            title="Delete"
+                            title={t.laDelete}
                           >
                             <Trash2 size={15} />
                           </button>
@@ -337,17 +357,17 @@ export default function LessonsAdminPage({ showToast, t }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
-                  <th className="px-4 py-2.5 font-medium">{t.teacher || 'Instructor'}</th>
-                  <th className="px-4 py-2.5 font-medium">{t.fromLabel || 'From'}</th>
-                  <th className="px-4 py-2.5 font-medium">{t.toLabel || 'To'}</th>
-                  <th className="px-4 py-2.5 font-medium text-right">{t.actions || 'Actions'}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.teacher}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.fromLabel}</th>
+                  <th className="px-4 py-2.5 font-medium">{t.toLabel}</th>
+                  <th className="px-4 py-2.5 font-medium text-right">{t.actions}</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedAvailability.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-8 text-center text-muted">
-                      {t.noAvailabilityAdmin || 'No availability blocks yet'}
+                      {t.noAvailabilityAdmin}
                     </td>
                   </tr>
                 ) : (
@@ -360,7 +380,7 @@ export default function LessonsAdminPage({ showToast, t }) {
                         <button
                           onClick={() => removeAvailability(avail.id)}
                           className="rounded p-1.5 text-muted hover:bg-red-50 hover:text-accent"
-                          title="Delete"
+                          title={t.laDelete}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -379,14 +399,14 @@ export default function LessonsAdminPage({ showToast, t }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-medium">{lessonModal.id ? (t.edit || 'Edit') + ' lesson' : (t.addLesson || 'Add lesson')}</h2>
+              <h2 className="text-lg font-medium">{lessonModal.id ? t.laEditLesson : t.addLesson}</h2>
               <button onClick={() => setLessonModal(null)} className="rounded p-1 text-muted hover:bg-gray-100">
                 <X size={18} />
               </button>
             </div>
 
             <div className="space-y-4">
-              <Field label={`${t.date || 'Date'} & ${t.time || 'Time'} *`}>
+              <Field label={`${t.date} & ${t.time} *`}>
                 <input
                   type="datetime-local"
                   className={fieldClass}
@@ -396,25 +416,25 @@ export default function LessonsAdminPage({ showToast, t }) {
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label={`${t.duration || 'Duration'} *`}>
+                <Field label={`${t.duration} *`}>
                   <select
                     className={fieldClass}
                     value={lessonModal.duration_minutes}
                     onChange={(e) => setLessonModal({ ...lessonModal, duration_minutes: e.target.value, teacherId: '' })}
                   >
-                    {DURATIONS.map((d) => (
-                      <option key={d} value={d}>{d} min</option>
+                    {durationOptions.map((d) => (
+                      <option key={d} value={d}>{durationLabel(d, t)}</option>
                     ))}
                   </select>
                 </Field>
 
-                <Field label={`${t.student || 'Student'} *`}>
+                <Field label={`${t.student} *`}>
                   <select
                     className={fieldClass}
                     value={lessonModal.studentId}
                     onChange={(e) => setLessonModal({ ...lessonModal, studentId: e.target.value, teacherId: '' })}
                   >
-                    <option value="">Select a student</option>
+                    <option value="">{t.laSelectStudentPlaceholder}</option>
                     {students.map((s) => (
                       <option key={s.id} value={s.id}>{s.full_name}</option>
                     ))}
@@ -422,7 +442,18 @@ export default function LessonsAdminPage({ showToast, t }) {
                 </Field>
               </div>
 
-              <Field label={`${t.teacher || 'Instructor'} *`}>
+              <Field label={`${t.laKind}`}>
+                <select
+                  className={fieldClass}
+                  value={lessonModal.kind || 'lesson'}
+                  onChange={(e) => setLessonModal({ ...lessonModal, kind: e.target.value })}
+                >
+                  <option value="lesson">{t.laKindLesson}</option>
+                  <option value="exam">{t.laKindExam}</option>
+                </select>
+              </Field>
+
+              <Field label={`${t.teacher} *`}>
                 <select
                   className={`${fieldClass} disabled:bg-gray-100 disabled:text-muted disabled:cursor-not-allowed`}
                   value={lessonModal.teacherId}
@@ -431,28 +462,28 @@ export default function LessonsAdminPage({ showToast, t }) {
                 >
                   <option value="">
                     {!prerequisitesMet
-                      ? 'Select date, duration & student first'
+                      ? t.laSelectDateFirst
                       : availableTeachers.length === 0
-                        ? 'No teachers available'
-                        : 'Select a teacher'}
+                        ? t.laNoTeachersAvailable
+                        : t.laSelectTeacherPlaceholder}
                   </option>
                   {availableTeachers.map((tc) => (
                     <option key={tc.id} value={tc.id}>{tc.full_name}</option>
                   ))}
                 </select>
                 {prerequisitesMet && availableTeachers.length === 0 && (
-                  <p className="text-xs text-orange-600 mt-1">No teachers available for this slot</p>
+                  <p className="text-xs text-orange-600 mt-1">{t.laNoTeachersForSlot}</p>
                 )}
                 {prerequisitesMet && availableTeachers.length > 0 && availableTeachers.length < teachers.length && (
                   <p className="text-xs text-muted mt-1">
-                    Showing {availableTeachers.length} of {teachers.length} teachers (others unavailable or have conflicts)
+                    {t.laShowingTeachers.replace('{shown}', availableTeachers.length).replace('{total}', teachers.length)}
                   </p>
                 )}
               </Field>
 
               <div className="flex justify-end gap-3 pt-2">
-                <Button onClick={() => setLessonModal(null)}>Cancel</Button>
-                <Button primary onClick={saveLesson}>{lessonModal.id ? (t.edit || 'Edit') : 'Create'}</Button>
+                <Button onClick={() => setLessonModal(null)}>{t.cancel}</Button>
+                <Button primary onClick={saveLesson}>{lessonModal.id ? t.edit : t.laCreate}</Button>
               </div>
             </div>
           </div>
@@ -464,27 +495,27 @@ export default function LessonsAdminPage({ showToast, t }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-medium">{t.addAvailability || 'Add availability'}</h2>
+              <h2 className="text-lg font-medium">{t.addAvailability}</h2>
               <button onClick={() => setAvailModal(null)} className="rounded p-1 text-muted hover:bg-gray-100">
                 <X size={18} />
               </button>
             </div>
 
             <div className="space-y-4">
-              <Field label={`${t.teacher || 'Instructor'} *`}>
+              <Field label={`${t.teacher} *`}>
                 <select
                   className={fieldClass}
                   value={availModal.teacherId}
                   onChange={(e) => setAvailModal({ ...availModal, teacherId: e.target.value })}
                 >
-                  <option value="">Select a teacher</option>
+                  <option value="">{t.laSelectTeacherPlaceholder}</option>
                   {teachers.map((tc) => (
                     <option key={tc.id} value={tc.id}>{tc.full_name}</option>
                   ))}
                 </select>
               </Field>
 
-              <Field label={`${t.fromLabel || 'From'} *`}>
+              <Field label={`${t.fromLabel} *`}>
                 <input
                   type="datetime-local"
                   className={fieldClass}
@@ -493,7 +524,7 @@ export default function LessonsAdminPage({ showToast, t }) {
                 />
               </Field>
 
-              <Field label={`${t.toLabel || 'To'} *`}>
+              <Field label={`${t.toLabel} *`}>
                 <input
                   type="datetime-local"
                   className={fieldClass}
@@ -503,8 +534,8 @@ export default function LessonsAdminPage({ showToast, t }) {
               </Field>
 
               <div className="flex justify-end gap-3 pt-2">
-                <Button onClick={() => setAvailModal(null)}>Cancel</Button>
-                <Button primary onClick={saveAvailability}>{t.saveSettings || 'Save'}</Button>
+                <Button onClick={() => setAvailModal(null)}>{t.cancel}</Button>
+                <Button primary onClick={saveAvailability}>{t.saveSettings}</Button>
               </div>
             </div>
           </div>

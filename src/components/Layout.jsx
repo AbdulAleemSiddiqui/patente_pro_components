@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Car, CalendarDays, CalendarCheck, ClipboardList, Clock,
-  LayoutDashboard, Route, Settings,
+  LayoutDashboard, Route, Settings, UserCheck,
   Shuffle, UserPlus, Users, LogOut, User, TrendingUp, Menu, X,
 } from 'lucide-react';
 import { Toast } from './ui.jsx';
@@ -70,6 +70,7 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
     Settings,
     Route,
     Shuffle,
+    UserCheck,
     User,
     TrendingUp,
   };
@@ -120,7 +121,7 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
                 <span className="flex-1 text-left">{t[item.page] || item.label}</span>
                 {item.comingSoon && (
                   <span className="inline-flex rounded-full bg-[#6eb5f5] px-1.5 py-0.5 text-[10px] font-medium text-white">
-                    Coming soon
+                    {t.navComingSoon}
                   </span>
                 )}
               </button>
@@ -139,8 +140,8 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
             {initials}
           </div>
           <div className="flex-1 min-w-0 text-left">
-            <div className="truncate text-xs font-medium text-white">{full_name || 'User'}</div>
-            <div className="text-[11px] text-white/45 capitalize">{role || 'Guest'}</div>
+            <div className="truncate text-xs font-medium text-white">{full_name || t.userFallback}</div>
+            <div className="text-[11px] text-white/45 capitalize">{role || t.guestFallback}</div>
           </div>
         </button>
         <button
@@ -148,7 +149,7 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
           className="flex items-center gap-2.5 rounded-md px-3 py-2 transition hover:bg-white/10 text-white/60 hover:text-white"
         >
           <LogOut size={16} />
-          <span className="text-xs">Logout</span>
+          <span className="text-xs">{t.logout}</span>
         </button>
       </div>
     </>
@@ -185,7 +186,7 @@ function TopHeader({ lang, setLang, t, tenant, mobileMenuOpen, setMobileMenuOpen
         <button
           className="md:hidden flex items-center justify-center rounded-md p-2 hover:bg-gray-100 transition"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Toggle menu"
+          aria-label={t.toggleMenu}
         >
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>

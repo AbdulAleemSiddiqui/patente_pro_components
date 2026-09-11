@@ -83,7 +83,7 @@ export default function StudentProgressPage({ showToast, t, lang }) {
     return (
       <Page>
         <div className="flex items-center justify-center py-12 text-sm text-muted">
-          Loading...
+          {t.loadingDots}
         </div>
       </Page>
     );
@@ -142,9 +142,9 @@ export default function StudentProgressPage({ showToast, t, lang }) {
               </div>
               <div>
                 <div className="text-2xl font-bold">
-                  {completedLessons.length > 0 ? 'Active' : 'Start'}
+                  {completedLessons.length > 0 ? t.spStatusActive : t.spStatusStart}
                 </div>
-                <div className="text-sm text-muted">Learning status</div>
+                <div className="text-sm text-muted">{t.spLearningStatus}</div>
               </div>
             </div>
           </div>
@@ -174,7 +174,7 @@ export default function StudentProgressPage({ showToast, t, lang }) {
 
                     {lesson.users?.lessons_teacher_id_fkey && (
                       <div className="text-xs text-muted mb-2">
-                        Instructor: {lesson.users.lessons_teacher_id_fkey.full_name}
+                        {t.spInstructorColon.replace('{name}', lesson.users.lessons_teacher_id_fkey.full_name)}
                       </div>
                     )}
 
@@ -185,7 +185,7 @@ export default function StudentProgressPage({ showToast, t, lang }) {
                     )}
 
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted">Rating:</span>
+                      <span className="text-xs text-muted">{t.spRatingColon}</span>
                       <div className="flex gap-1">
                         {['poor', 'fair', 'good'].map((rating) => (
                           <div
@@ -206,7 +206,7 @@ export default function StudentProgressPage({ showToast, t, lang }) {
 
                     {lesson.lesson_feedback?.maneuver_ratings?.length > 0 && (
                       <div className="mt-2">
-                        <div className="text-xs text-muted mb-1">Manoeuvres practiced:</div>
+                        <div className="text-xs text-muted mb-1">{t.spManoeuvresPracticed}</div>
                         <div className="flex flex-wrap gap-1">
                           {lesson.lesson_feedback.maneuver_ratings.slice(0, 3).map((mr) => (
                             <span
