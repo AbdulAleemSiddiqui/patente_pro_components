@@ -3,3 +3,10 @@ dist/
 .vite/
 .env
 .env.local
+
+# Data-parser sync tooling
+output/.DS_Store
+supabase/.temp/
+supabase/.branches/
+
+# Never commit secrets
