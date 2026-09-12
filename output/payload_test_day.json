@@ -1,0 +1,252 @@
+{
+  "generated_at": "2026-09-11T08:59:57.112479+02:00",
+  "source": "output/master_data.csv",
+  "date_from": "2025-01-03",
+  "date_to": "2025-01-03",
+  "rows_read": 27240,
+  "lessons": [
+    {
+      "teacher_name": "GABRIELE",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T07:00:00+01:00",
+      "duration_minutes": 960,
+      "status": "completed",
+      "kind": "ferie",
+      "task": "FERIE"
+    },
+    {
+      "teacher_name": "PINO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T07:00:00+01:00",
+      "duration_minutes": 600,
+      "status": "completed",
+      "kind": "ferie",
+      "task": "FERIE"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T08:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "ferie",
+      "task": "FERIE"
+    },
+    {
+      "teacher_name": "LINO",
+      "student_name": "ZAPPIA",
+      "scheduled_at": "2025-01-03T08:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "ZAPPIA"
+    },
+    {
+      "teacher_name": "PAOLO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T08:00:00+01:00",
+      "duration_minutes": 720,
+      "status": "completed",
+      "kind": "ferie",
+      "task": "FERIE"
+    },
+    {
+      "teacher_name": "ERIKA",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T09:00:00+01:00",
+      "duration_minutes": 180,
+      "status": "completed",
+      "kind": "office",
+      "task": "UFFICIO"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": "DE LEO",
+      "scheduled_at": "2025-01-03T09:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "DE LEO"
+    },
+    {
+      "teacher_name": "LINO",
+      "student_name": "CARDONE",
+      "scheduled_at": "2025-01-03T09:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "CARDONE"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T10:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "theory",
+      "task": "TEORIA + PRE-ESAMI"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T10:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "exam",
+      "task": "TEORIA + PRE-ESAMI"
+    },
+    {
+      "teacher_name": "LINO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T10:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "theory",
+      "task": "TEORIA"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": "DEL BENE",
+      "scheduled_at": "2025-01-03T11:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "DEL BENE"
+    },
+    {
+      "teacher_name": "LINO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T11:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "dtt",
+      "task": "DTT"
+    },
+    {
+      "teacher_name": "AURORA",
+      "student_name": "PETROV",
+      "scheduled_at": "2025-01-03T14:00:00+01:00",
+      "duration_minutes": 120,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "PETROV"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": "CESARI",
+      "scheduled_at": "2025-01-03T15:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "CESARI"
+    },
+    {
+      "teacher_name": "AURORA",
+      "student_name": "HRUSTIC G.A",
+      "scheduled_at": "2025-01-03T16:00:00+01:00",
+      "duration_minutes": 120,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "HRUSTIC G.A"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T16:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "theory",
+      "task": "TEORIA"
+    },
+    {
+      "teacher_name": "LINO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T16:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "theory",
+      "task": "TEORIA"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": "ALPINO",
+      "scheduled_at": "2025-01-03T17:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "ALPINO"
+    },
+    {
+      "teacher_name": "LINO",
+      "student_name": "CQC",
+      "scheduled_at": "2025-01-03T17:00:00+01:00",
+      "duration_minutes": 120,
+      "status": "completed",
+      "kind": "points_recovery",
+      "task": "CQC"
+    },
+    {
+      "teacher_name": "PINO",
+      "student_name": "IQBAL",
+      "scheduled_at": "2025-01-03T17:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "IQBAL"
+    },
+    {
+      "teacher_name": "AURORA",
+      "student_name": "GUGLIELMINETTI",
+      "scheduled_at": "2025-01-03T18:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "GUGLIELMINETTI"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": "SOGGIA",
+      "scheduled_at": "2025-01-03T18:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "SOGGIA"
+    },
+    {
+      "teacher_name": "PINO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T18:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "exam",
+      "task": "PRE ESAME"
+    },
+    {
+      "teacher_name": "AURORA",
+      "student_name": "CHANTSEV",
+      "scheduled_at": "2025-01-03T19:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "lesson",
+      "task": "CHANTSEV"
+    },
+    {
+      "teacher_name": "GIORGIO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T19:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "theory",
+      "task": "TEORIA"
+    },
+    {
+      "teacher_name": "PINO",
+      "student_name": null,
+      "scheduled_at": "2025-01-03T19:00:00+01:00",
+      "duration_minutes": 60,
+      "status": "completed",
+      "kind": "theory",
+      "task": "TEORIA"
+    }
+  ]
+}
