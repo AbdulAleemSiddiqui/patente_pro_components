@@ -2,7 +2,7 @@
 """
 transform.py — Convert parser.py's master CSV into a Supabase-ready payload.
 
-Pipeline (see supabase-fastapi-sync-plan.md):
+Pipeline (see docs/supabase-fastapi-sync-plan.md):
 
     parser.py ──► output/master_data.csv ──► [this script]
                                             ├──► output/supabase_payload.json
@@ -301,6 +301,8 @@ def main():
     ap.add_argument("--output", default="output/supabase_payload.json")
     ap.add_argument("--date-from", default=None, help="inclusive YYYY-MM-DD filter")
     ap.add_argument("--date-to", default=None, help="inclusive YYYY-MM-DD filter")
+    ap.add_argument("--kinds", default=None,
+                    help="comma-separated kind filter, e.g. lesson,exam (default: all)")
     args = ap.parse_args()
 
     in_path = Path(args.input)
@@ -368,6 +370,10 @@ def main():
                 "task": ident.lstrip(":"),
             })
     lessons.sort(key=lambda x: (x["scheduled_at"], x["teacher_name"]))
+
+    if args.kinds:
+        allowed = {k.strip() for k in args.kinds.split(",")}
+        lessons = [l for l in lessons if l["kind"] in allowed]
 
     if not lessons:
         sys.exit("No lessons produced — check the input CSV / date filters.")

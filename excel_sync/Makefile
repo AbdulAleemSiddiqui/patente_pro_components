@@ -1,12 +1,14 @@
-# Sync pipeline: GIORNALIERE Excel → Supabase `lessons` (see supabase-fastapi-sync-plan.md)
+# Sync pipeline: GIORNALIERE Excel → Supabase `lessons` (see docs/supabase-fastapi-sync-plan.md)
+#
+# Run all targets from this directory (excel_sync/).
 #
 # First-time setup:
 #   1. Run the SQL in the plan's §2 (unique constraint + storage bucket).
-#   2. cp .env.example .env   → fill in SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+#   2. cp ../.env.example ../.env   → fill in SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
 #   3. supabase link --project-ref YOUR-REF && supabase functions deploy sync-lessons
 
 SHELL := /bin/zsh
--include .env
+-include ../.env
 export
 
 XLSX     := GIORNALIERE FRANCO LADY.xlsx
