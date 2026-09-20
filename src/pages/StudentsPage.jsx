@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import {
   Card, Page, PageHeader, ProgressBar, SignalLights,
@@ -70,6 +71,7 @@ export default function StudentsPage({ t }) {
   const [students, setStudents] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -104,6 +106,17 @@ export default function StudentsPage({ t }) {
 
   const selected = students.find((s) => s.id === selectedId) || null;
 
+  // Filter by name or phone, case-insensitive
+  const filteredStudents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter(
+      (s) =>
+        s.full_name?.toLowerCase().includes(q) ||
+        s.phone?.toLowerCase().includes(q),
+    );
+  }, [students, query]);
+
   if (loading) {
     return (
       <Page>
@@ -118,6 +131,19 @@ export default function StudentsPage({ t }) {
 
       {/* Student table — capped at ~4 rows (scroll for more); horizontal scroll on mobile */}
       <Card>
+        {/* Search box */}
+        <div className="border-b border-line p-3">
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t.search}
+              className="h-9 w-full rounded-md border border-line bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-muted focus:border-brand"
+            />
+          </div>
+        </div>
         <div className="max-h-[300px] overflow-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="sticky top-0 z-10">
@@ -130,12 +156,12 @@ export default function StudentsPage({ t }) {
               </tr>
             </thead>
             <tbody>
-              {students.length === 0 ? (
+              {filteredStudents.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-muted">{t.studentsNotFound}</td>
                 </tr>
               ) : (
-                students.map((s) => {
+                filteredStudents.map((s) => {
                   const stats = summarize(lessonsByStudent[s.id] || []);
                   const isActive = selectedId === s.id;
                   return (
