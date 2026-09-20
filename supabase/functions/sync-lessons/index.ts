@@ -262,17 +262,37 @@ async function resolveUsers(
   for (let i = 0; i < missing.length; i += AUTH_CONCURRENCY) {
     const batch = missing.slice(i, i + AUTH_CONCURRENCY);
     const results = await Promise.all(batch.map(async (name): Promise<Created> => {
-      const email = `${slug(name)}.${crypto.randomUUID().slice(0, 8)}@sync.local`;
-      const { data, error } = await supabase.auth.admin.createUser({
+      // Teachers get a predictable login so the school can hand it out:
+      //   email <slug>@sync.local, password <slug>@123
+      // (admin should rotate these passwords before real use). Students keep
+      // opaque placeholder emails — no login intended for them.
+      const isTeacher = role === "teacher";
+      let email = isTeacher
+        ? `${slug(name)}@sync.local`
+        : `${slug(name)}.${crypto.randomUUID().slice(0, 8)}@sync.local`;
+      let res = await supabase.auth.admin.createUser({
         email,
         email_confirm: true,
-        user_metadata: { full_name: name, tenant_role: role, source: "sheet-sync" },
+        ...(isTeacher ? { password: `${slug(name)}@123` } : {}),
+        // `role` (not tenant_role) is what the app's auth store reads at login
+        user_metadata: { full_name: name, role, tenant_role: role, source: "sheet-sync" },
       });
+      // Two people sharing a name: the clean address is taken — fall back to
+      // a unique one (same password scheme).
+      if (res.error && isTeacher && /already|duplicate|unique/i.test(res.error.message)) {
+        email = `${slug(name)}.${crypto.randomUUID().slice(0, 8)}@sync.local`;
+        res = await supabase.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          password: `${slug(name)}@123`,
+          user_metadata: { full_name: name, role, tenant_role: role, source: "sheet-sync" },
+        });
+      }
       return {
         name,
-        id: data?.user?.id ?? "",
+        id: res.data?.user?.id ?? "",
         email,
-        err: error ? `${name}: ${error.message}` : null,
+        err: res.error ? `${name}: ${res.error.message}` : null,
       };
     }));
     authUsers.push(...results);

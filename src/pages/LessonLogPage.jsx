@@ -71,7 +71,9 @@ export default function LessonLogPage({ showToast, t, navigate }) {
         if (teacherId) {
           // Only students with a still-scheduled lesson with this teacher are pickable
           const eligibleStudentIds = new Set(
-            (teacherLessons || []).filter((l) => l.status === 'scheduled').map((l) => l.student_id),
+            (teacherLessons || [])
+              .filter((l) => l.status === 'scheduled' && l.kind === 'lesson')
+              .map((l) => l.student_id),
           );
           setStudents((studentsData || []).filter((s) => eligibleStudentIds.has(s.id)));
         } else {
@@ -123,7 +125,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
         const data = await listLessons({ tenantId, studentId, teacherId });
         if (cancelled) return;
         const visible = (data || [])
-          .filter((l) => l.status === 'scheduled')
+          .filter((l) => l.status === 'scheduled' && l.kind === 'lesson')
           .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
         setLessons(visible);
       } catch (error) {

@@ -1,5 +1,8 @@
 import { requireSupabase } from './supabase.js';
 
+// PostgREST caps a single request at 1000 rows (Supabase default) — page at 1000.
+const LESSONS_PAGE = 1000;
+
 function byTenant(query, tenantId) {
   return tenantId ? query.eq('tenant_id', tenantId) : query;
 }
@@ -69,31 +72,42 @@ export async function listLessons({ tenantId, teacherId, studentId } = {}) {
  */
 export async function listLessonsWithFeedback({ tenantId, teacherId, studentId } = {}) {
   const client = requireSupabase();
-  let query = client
-    .from('lessons')
-    .select(
-      `id, status, scheduled_at, duration_minutes, student_id, teacher_id,
-       teacher:users!lessons_teacher_id_fkey(id, full_name),
-       student:users!lessons_student_id_fkey(id, full_name),
-       feedback:lesson_feedback(
-         notes, general_rating,
-         from_highway:highways!lesson_feedback_from_highway_id_fkey(id, name),
-         to_highway:highways!lesson_feedback_to_highway_id_fkey(id, name),
-         ratings:maneuver_ratings(
-           rating,
-           maneuver:maneuvers(id, name, order_index, type:maneuver_types(id, name, order_index))
-         )
-       )`,
-    )
-    .order('scheduled_at');
+  const SELECT = `id, status, scheduled_at, duration_minutes, student_id, teacher_id,
+    teacher:users!lessons_teacher_id_fkey(id, full_name),
+    student:users!lessons_student_id_fkey(id, full_name),
+    feedback:lesson_feedback(
+      notes, general_rating,
+      from_highway:highways!lesson_feedback_from_highway_id_fkey(id, name),
+      to_highway:highways!lesson_feedback_to_highway_id_fkey(id, name),
+      ratings:maneuver_ratings(
+        rating,
+        maneuver:maneuvers(id, name, order_index, type:maneuver_types(id, name, order_index))
+      )
+    )`;
 
-  query = byTenant(query, tenantId);
-  if (teacherId) query = query.eq('teacher_id', teacherId);
-  if (studentId) query = query.eq('student_id', studentId);
+  const pageQuery = (from) => {
+    let q = client
+      .from('lessons')
+      .select(SELECT)
+      // id as tiebreaker: stable order is required for range paging
+      .order('scheduled_at')
+      .order('id');
+    q = byTenant(q, tenantId);
+    if (teacherId) q = q.eq('teacher_id', teacherId);
+    if (studentId) q = q.eq('student_id', studentId);
+    return q.range(from, from + LESSONS_PAGE - 1);
+  };
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
+  // PostgREST silently caps single requests (Supabase default: 1000 rows) —
+  // the sheet import puts thousands of lessons in this table, so page through.
+  const all = [];
+  for (let from = 0; ; from += LESSONS_PAGE) {
+    const { data, error } = await pageQuery(from);
+    if (error) throw error;
+    all.push(...(data ?? []));
+    if (!data || data.length < LESSONS_PAGE) break;
+  }
+  return all;
 }
 
 /**
