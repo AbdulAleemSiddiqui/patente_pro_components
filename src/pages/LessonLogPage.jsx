@@ -357,7 +357,8 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                 />
               </Field>
 
-              <div className="flex justify-end pt-2">
+              {/* Save button — desktop only; on mobile it sits at the end of tipologia instead */}
+              <div className="hidden justify-end pt-2 lg:flex">
                 <Button primary onClick={handleSubmit} className="max-w-fit" >
                   <Save size={16} />
                   {t.saveLesson}
@@ -440,6 +441,14 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                   })}
                 </div>
               )}
+
+              {/* Save button — mobile only: end of tipologia instead of after instructor notes */}
+              <div className="mt-4 flex justify-center lg:hidden">
+                <Button primary onClick={handleSubmit} className="max-w-fit" >
+                  <Save size={16} />
+                  {t.saveLesson}
+                </Button>
+              </div>
             </div>
           </Card>
 
