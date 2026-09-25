@@ -14,40 +14,6 @@ import {
   updateTenant,
 } from '../lib/api.js';
 
-// Small inline form under a catalog card: text input (+ optional color) + Add
-function CatalogAddRow({ placeholder, withColor, color, onColorChange, onAdd, addLabel }) {
-  const [value, setValue] = useState('');
-  const submit = () => {
-    if (!value.trim()) return;
-    onAdd(value.trim());
-    setValue('');
-  };
-  return (
-    <div className="flex items-center gap-2">
-      {withColor && (
-        <input
-          type="color"
-          className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-line bg-white p-0.5"
-          value={color}
-          onChange={(e) => onColorChange(e.target.value)}
-          title={addLabel}
-        />
-      )}
-      <input
-        className={fieldClass}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-      />
-      <Button primary onClick={submit}>
-        <Plus size={14} />
-        {addLabel}
-      </Button>
-    </div>
-  );
-}
-
 // Chip with delete — same interface for every catalog item
 function CatalogChip({ label, color, onRename, onDelete, t, children }) {
   return (
@@ -90,16 +56,14 @@ export default function SettingsPage({ showToast, t }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Maneuver add state
-  const [newManeuverType, setNewManeuverType] = useState('');
-  const [newManeuverName, setNewManeuverName] = useState('');
-  // Branch add color
-  const [newBranchColor, setNewBranchColor] = useState('#2563eb');
-
   // Maneuver rename state
   const [editingManeuverId, setEditingManeuverId] = useState(null);
   const [maneuverDraft, setManeuverDraft] = useState('');
   const [renaming, setRenaming] = useState(false);
+
+  // Add-item modal: null | 'highway' | 'category' | 'branch' | 'maneuver'
+  const [addModal, setAddModal] = useState(null);
+  const [addDraft, setAddDraft] = useState({ name: '', typeId: '', color: '#2563eb' });
 
   // School profile (editable)
   const [schoolName, setSchoolName] = useState('');
@@ -126,7 +90,6 @@ export default function SettingsPage({ showToast, t }) {
         setHighways(highwayData || []);
         setCategories(categoryData || []);
         setBranches(branchData || []);
-        if (typesData?.length) setNewManeuverType(typesData[0].id);
       } catch (error) {
         console.error('Failed to load settings data', error);
       } finally {
@@ -149,12 +112,11 @@ export default function SettingsPage({ showToast, t }) {
     setManeuvers(data || []);
   };
 
-  const handleAddManeuver = async () => {
-    const name = newManeuverName.trim();
-    if (!name || !newManeuverType) return;
+  const handleAddManeuver = async (typeId, nameRaw) => {
+    const name = nameRaw.trim();
+    if (!name || !typeId) return;
     try {
-      await createManeuver({ tenantId, typeId: newManeuverType, name });
-      setNewManeuverName('');
+      await createManeuver({ tenantId, typeId, name });
       await refreshManeuvers();
       showToast(`${t.maneuverCatalog}: ${name} ✓`);
     } catch (error) {
@@ -278,10 +240,9 @@ export default function SettingsPage({ showToast, t }) {
     setBranches(data || []);
   };
 
-  const handleAddBranch = async (label) => {
+  const handleAddBranch = async (label, color) => {
     try {
-      await createBranch({ tenantId, label, color: newBranchColor });
-      setNewBranchColor('#2563eb');
+      await createBranch({ tenantId, label, color });
       await refreshBranches();
       showToast(`${t.branches}: ${label} ✓`);
     } catch (error) {
@@ -313,6 +274,29 @@ export default function SettingsPage({ showToast, t }) {
       showToast(t.settingsBranchDeleteFailed, 'error');
     }
   };
+
+  // ── Add-item modal ─────────────────────────────────────────────────────
+  const openAdd = (kind) => {
+    setAddDraft({ name: '', typeId: maneuverTypes[0]?.id || '', color: '#2563eb' });
+    setAddModal(kind);
+  };
+
+  const submitAdd = async () => {
+    const name = addDraft.name.trim();
+    if (!name) return;
+    if (addModal === 'highway') await handleAddHighway(name);
+    else if (addModal === 'category') await handleAddCategory(name);
+    else if (addModal === 'branch') await handleAddBranch(name, addDraft.color);
+    else if (addModal === 'maneuver') await handleAddManeuver(addDraft.typeId, name);
+    setAddModal(null);
+  };
+
+  const addModalTitle = {
+    highway: t.highways,
+    category: t.categories,
+    branch: t.branches,
+    maneuver: t.maneuverCatalog,
+  }[addModal] || '';
 
   // Pick an image and store it uncropped (aspect preserved, downscaled to
   // fit 512px) as a draft — it is persisted with "Save settings". The app
@@ -381,16 +365,7 @@ export default function SettingsPage({ showToast, t }) {
 
   return (
     <Page>
-      <PageHeader
-        title={t.schoolSettings}
-        subtitle={t.schoolSettingsSub}
-        action={
-          <Button primary onClick={handleSaveProfile} className={saving ? 'opacity-60 pointer-events-none' : ''}>
-            <Save size={16} />
-            {t.saveSettings}
-          </Button>
-        }
-      />
+      <PageHeader title={t.schoolSettings} subtitle={t.schoolSettingsSub} />
 
       <TwoColumnGrid>
         <Card title={t.schoolProfile}>
@@ -407,14 +382,15 @@ export default function SettingsPage({ showToast, t }) {
             {/* Logo — shown in the menu and as the browser (.ico) icon */}
             <Field label={t.logoUpload}>
               <div className="flex items-center gap-3">
+                {/* Small square box, like the menu-bar logo slot */}
                 {logoUrl ? (
                   <img
                     src={logoUrl}
                     alt={t.logoUpload}
-                    className="h-14 min-w-0 flex-1 rounded-lg border border-line object-contain"
+                    className="size-14 shrink-0 rounded-lg border border-line object-contain"
                   />
                 ) : (
-                  <div className="grid h-14 min-w-0 flex-1 place-items-center rounded-lg border border-dashed border-line text-muted">
+                  <div className="grid size-14 shrink-0 place-items-center rounded-lg border border-dashed border-line text-muted">
                     <Car size={20} />
                   </div>
                 )}
@@ -442,12 +418,28 @@ export default function SettingsPage({ showToast, t }) {
                 </div>
               </div>
             </Field>
+
+            {/* Save — at the end of the form, like Log lesson */}
+            <div className="flex justify-end pt-1">
+              <Button primary onClick={handleSaveProfile} className={saving ? 'opacity-60 pointer-events-none' : ''}>
+                <Save size={16} />
+                {t.saveSettings}
+              </Button>
+            </div>
           </div>
         </Card>
 
-        <Card title={t.highways}>
+        <Card
+          title={t.highways}
+          action={
+            <Button small primary onClick={() => openAdd('highway')}>
+              <Plus size={13} />
+              {t.add}
+            </Button>
+          }
+        >
           <div className="p-4">
-            <div className="mb-3 flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {highways.length === 0 ? (
                 <span className="text-sm text-muted">—</span>
               ) : (
@@ -456,17 +448,20 @@ export default function SettingsPage({ showToast, t }) {
                 ))
               )}
             </div>
-            <CatalogAddRow
-              placeholder={t.addHighwayPlaceholder}
-              onAdd={handleAddHighway}
-              addLabel={t.add}
-            />
           </div>
         </Card>
       </TwoColumnGrid>
 
       <TwoColumnGrid>
-        <Card title={t.maneuverCatalog}>
+        <Card
+          title={t.maneuverCatalog}
+          action={
+            <Button small primary onClick={() => openAdd('maneuver')}>
+              <Plus size={13} />
+              {t.add}
+            </Button>
+          }
+        >
           <div className="space-y-3 p-4">
             {maneuvers.length === 0 ? (
               <span className="text-sm text-muted">—</span>
@@ -524,37 +519,21 @@ export default function SettingsPage({ showToast, t }) {
                 </div>
               ))
             )}
-
-            {/* Add maneuver: type + name */}
-            <div className="flex items-center gap-2 border-t border-line pt-3">
-              <select
-                className={`${fieldClass} w-auto`}
-                value={newManeuverType}
-                onChange={(e) => setNewManeuverType(e.target.value)}
-              >
-                {maneuverTypes.map((type) => (
-                  <option key={type.id} value={type.id}>{type.name}</option>
-                ))}
-              </select>
-              <input
-                className={fieldClass}
-                placeholder={t.settingsManeuverNamePlaceholder}
-                value={newManeuverName}
-                onChange={(e) => setNewManeuverName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddManeuver(); }}
-              />
-              <Button primary onClick={handleAddManeuver}>
-                <Plus size={14} />
-                {t.add}
-              </Button>
-            </div>
           </div>
         </Card>
 
         <div className="space-y-3.5">
-          <Card title={t.categories}>
+          <Card
+            title={t.categories}
+            action={
+              <Button small primary onClick={() => openAdd('category')}>
+                <Plus size={13} />
+                {t.add}
+              </Button>
+            }
+          >
             <div className="p-4">
-              <div className="mb-3 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {categories.length === 0 ? (
                   <span className="text-sm text-muted">—</span>
                 ) : (
@@ -563,17 +542,20 @@ export default function SettingsPage({ showToast, t }) {
                   ))
                 )}
               </div>
-              <CatalogAddRow
-                placeholder={t.settingsCategoryPlaceholder}
-                onAdd={handleAddCategory}
-                addLabel={t.add}
-              />
             </div>
           </Card>
 
-          <Card title={t.branches}>
+          <Card
+            title={t.branches}
+            action={
+              <Button small primary onClick={() => openAdd('branch')}>
+                <Plus size={13} />
+                {t.add}
+              </Button>
+            }
+          >
             <div className="p-4">
-              <div className="mb-3 space-y-1.5">
+              <div className="space-y-1.5">
                 {branches.length === 0 ? (
                   <span className="text-sm text-muted">—</span>
                 ) : (
@@ -599,18 +581,78 @@ export default function SettingsPage({ showToast, t }) {
                   ))
                 )}
               </div>
-              <CatalogAddRow
-                placeholder={t.settingsBranchPlaceholder}
-                withColor
-                color={newBranchColor}
-                onColorChange={setNewBranchColor}
-                onAdd={handleAddBranch}
-                addLabel={t.add}
-              />
             </div>
           </Card>
         </div>
       </TwoColumnGrid>
+
+      {/* Add-item modal — one shared modal for all catalog cards */}
+      {addModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-medium">{addModalTitle}</h2>
+              <button onClick={() => setAddModal(null)} className="rounded p-1 text-muted hover:bg-gray-100">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {addModal === 'maneuver' && (
+                <Field label={t.laKind}>
+                  <select
+                    className={fieldClass}
+                    value={addDraft.typeId}
+                    onChange={(e) => setAddDraft({ ...addDraft, typeId: e.target.value })}
+                  >
+                    {maneuverTypes.map((type) => (
+                      <option key={type.id} value={type.id}>{type.name}</option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+
+              <Field label={t.name}>
+                <input
+                  autoFocus
+                  className={fieldClass}
+                  value={addDraft.name}
+                  onChange={(e) => setAddDraft({ ...addDraft, name: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submitAdd(); }}
+                  placeholder={
+                    addModal === 'highway' ? t.addHighwayPlaceholder
+                      : addModal === 'category' ? t.settingsCategoryPlaceholder
+                      : addModal === 'branch' ? t.settingsBranchPlaceholder
+                      : t.settingsManeuverNamePlaceholder
+                  }
+                />
+              </Field>
+
+              {addModal === 'branch' && (
+                <Field label={t.colorLabel}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-line bg-white p-0.5"
+                      value={addDraft.color}
+                      onChange={(e) => setAddDraft({ ...addDraft, color: e.target.value })}
+                    />
+                    <span className="text-xs text-muted">{addDraft.color.toUpperCase()}</span>
+                  </div>
+                </Field>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button onClick={() => setAddModal(null)}>{t.cancel}</Button>
+                <Button primary onClick={submitAdd}>
+                  <Plus size={14} />
+                  {t.add}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Page>
   );
 }
