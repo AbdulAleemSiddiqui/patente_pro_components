@@ -1,24 +1,100 @@
-import { useEffect, useState } from 'react';
-import { Check, Pencil, Save, X } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
+import { Car, Check, ImagePlus, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   Button, Card, Field, fieldClass,
-  Page, PageHeader, SectionLabel, Tag, TwoColumnGrid,
+  Page, PageHeader, SectionLabel, TwoColumnGrid,
 } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
+import { fileToLogoDataUrl, isImageFileTooLarge } from '../lib/logo.js';
 import {
-  listManeuvers, listErrorTags, updateManeuver,
+  listManeuvers, listManeuverTypes, createManeuver, deleteManeuver, updateManeuver,
   listHighways, createHighway, deleteHighway,
+  listCategories, createCategory, deleteCategory,
+  listBranches, createBranch, updateBranch, deleteBranch,
   updateTenant,
 } from '../lib/api.js';
+
+// Small inline form under a catalog card: text input (+ optional color) + Add
+function CatalogAddRow({ placeholder, withColor, color, onColorChange, onAdd, addLabel }) {
+  const [value, setValue] = useState('');
+  const submit = () => {
+    if (!value.trim()) return;
+    onAdd(value.trim());
+    setValue('');
+  };
+  return (
+    <div className="flex items-center gap-2">
+      {withColor && (
+        <input
+          type="color"
+          className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-line bg-white p-0.5"
+          value={color}
+          onChange={(e) => onColorChange(e.target.value)}
+          title={addLabel}
+        />
+      )}
+      <input
+        className={fieldClass}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+      />
+      <Button primary onClick={submit}>
+        <Plus size={14} />
+        {addLabel}
+      </Button>
+    </div>
+  );
+}
+
+// Chip with delete — same interface for every catalog item
+function CatalogChip({ label, color, onRename, onDelete, t, children }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border border-brand-mid bg-brand-light px-2.5 py-1 text-xs text-brand-mid"
+      style={color ? { backgroundColor: `${color}22`, borderColor: color, color: '#000000d0' } : undefined}
+    >
+      {children || label}
+      {onRename && (
+        <button
+          type="button"
+          className="inline-flex items-center justify-center rounded-full hover:text-accent"
+          title={t.edit}
+          onClick={onRename}
+        >
+          <Pencil size={11} />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          className="inline-flex items-center justify-center rounded-full hover:text-accent"
+          title={t.delete}
+          onClick={onDelete}
+        >
+          <Trash2 size={11} />
+        </button>
+      )}
+    </span>
+  );
+}
 
 export default function SettingsPage({ showToast, t }) {
   const { tenantId, tenant, loadTenant } = useAuthStore();
   const [maneuvers, setManeuvers] = useState([]);
-  const [errorTags, setErrorTags] = useState([]);
+  const [maneuverTypes, setManeuverTypes] = useState([]);
   const [highways, setHighways] = useState([]);
-  const [newHighway, setNewHighway] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Maneuver add state
+  const [newManeuverType, setNewManeuverType] = useState('');
+  const [newManeuverName, setNewManeuverName] = useState('');
+  // Branch add color
+  const [newBranchColor, setNewBranchColor] = useState('#2563eb');
 
   // Maneuver rename state
   const [editingManeuverId, setEditingManeuverId] = useState(null);
@@ -27,6 +103,9 @@ export default function SettingsPage({ showToast, t }) {
 
   // School profile (editable)
   const [schoolName, setSchoolName] = useState('');
+  // Logo draft (data URL) — saved together with the profile via Save settings
+  const [logoUrl, setLogoUrl] = useState(null);
+  const logoInputRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -35,16 +114,19 @@ export default function SettingsPage({ showToast, t }) {
           setLoading(false);
           return;
         }
-
-        const [maneuverData, errorData, highwayData] = await Promise.all([
+        const [maneuverData, typesData, highwayData, categoryData, branchData] = await Promise.all([
           listManeuvers({ tenantId }),
-          listErrorTags({ tenantId }),
+          listManeuverTypes({ tenantId }),
           listHighways({ tenantId }),
+          listCategories({ tenantId }),
+          listBranches({ tenantId }),
         ]);
-
         setManeuvers(maneuverData || []);
-        setErrorTags(errorData || []);
+        setManeuverTypes(typesData || []);
         setHighways(highwayData || []);
+        setCategories(categoryData || []);
+        setBranches(branchData || []);
+        if (typesData?.length) setNewManeuverType(typesData[0].id);
       } catch (error) {
         console.error('Failed to load settings data', error);
       } finally {
@@ -58,49 +140,26 @@ export default function SettingsPage({ showToast, t }) {
     if (!tenant && tenantId) loadTenant(tenantId);
     if (tenant) {
       setSchoolName(tenant.name || '');
+      setLogoUrl(tenant.logo_url || null);
     }
   }, [tenant, tenantId, loadTenant]);
 
-  const refreshHighways = async () => {
-    try {
-      const data = await listHighways({ tenantId });
-      setHighways(data || []);
-    } catch (error) {
-      console.error('Failed to reload highways', error);
-    }
-  };
-
-  const handleAddHighway = async () => {
-    const name = newHighway.trim();
-    if (!name) return;
-    try {
-      await createHighway({ tenantId, name });
-      setNewHighway('');
-      await refreshHighways();
-      showToast(`${t.highways}: ${name} ✓`);
-    } catch (error) {
-      console.error('Failed to add highway', error);
-      showToast(t.settingsHighwayAddFailed, 'error');
-    }
-  };
-
-  const handleDeleteHighway = async (id) => {
-    try {
-      await deleteHighway({ id });
-      await refreshHighways();
-      showToast(`${t.highways} ✓`);
-    } catch (error) {
-      console.error('Failed to delete highway', error);
-      showToast(t.settingsHighwayDeleteFailed, 'error');
-    }
-  };
-
   const refreshManeuvers = async () => {
+    const data = await listManeuvers({ tenantId });
+    setManeuvers(data || []);
+  };
+
+  const handleAddManeuver = async () => {
+    const name = newManeuverName.trim();
+    if (!name || !newManeuverType) return;
     try {
-      const data = await listManeuvers({ tenantId });
-      setManeuvers(data || []);
+      await createManeuver({ tenantId, typeId: newManeuverType, name });
+      setNewManeuverName('');
+      await refreshManeuvers();
+      showToast(`${t.maneuverCatalog}: ${name} ✓`);
     } catch (error) {
-      console.error('Failed to reload maneuvers', error);
+      console.error('Failed to add maneuver', error);
+      showToast(t.settingsManeuverAddFailed, 'error');
     }
   };
 
@@ -147,12 +206,140 @@ export default function SettingsPage({ showToast, t }) {
     }
   };
 
+  const handleDeleteManeuver = async (id) => {
+    if (!confirm(t.settingsManeuverDeleteConfirm)) return;
+    try {
+      await deleteManeuver({ id });
+      await refreshManeuvers();
+      showToast(`${t.maneuverCatalog} ✓`);
+    } catch (error) {
+      console.error('Failed to delete maneuver', error);
+      showToast(t.settingsManeuverDeleteFailed, 'error');
+    }
+  };
+
+  const refreshHighways = async () => {
+    const data = await listHighways({ tenantId });
+    setHighways(data || []);
+  };
+
+  const handleAddHighway = async (name) => {
+    try {
+      await createHighway({ tenantId, name });
+      await refreshHighways();
+      showToast(`${t.highways}: ${name} ✓`);
+    } catch (error) {
+      console.error('Failed to add highway', error);
+      showToast(t.settingsHighwayAddFailed, 'error');
+    }
+  };
+
+  const handleDeleteHighway = async (id) => {
+    try {
+      await deleteHighway({ id });
+      await refreshHighways();
+      showToast(`${t.highways} ✓`);
+    } catch (error) {
+      console.error('Failed to delete highway', error);
+      showToast(t.settingsHighwayDeleteFailed, 'error');
+    }
+  };
+
+  const refreshCategories = async () => {
+    const data = await listCategories({ tenantId });
+    setCategories(data || []);
+  };
+
+  const handleAddCategory = async (label) => {
+    try {
+      await createCategory({ tenantId, label });
+      await refreshCategories();
+      showToast(`${t.categories}: ${label} ✓`);
+    } catch (error) {
+      console.error('Failed to add category', error);
+      showToast(t.settingsCategoryAddFailed, 'error');
+    }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!confirm(t.settingsCategoryDeleteConfirm)) return;
+    try {
+      await deleteCategory({ id });
+      await refreshCategories();
+      showToast(`${t.categories} ✓`);
+    } catch (error) {
+      console.error('Failed to delete category', error);
+      showToast(t.settingsCategoryDeleteFailed, 'error');
+    }
+  };
+
+  const refreshBranches = async () => {
+    const data = await listBranches({ tenantId });
+    setBranches(data || []);
+  };
+
+  const handleAddBranch = async (label) => {
+    try {
+      await createBranch({ tenantId, label, color: newBranchColor });
+      setNewBranchColor('#2563eb');
+      await refreshBranches();
+      showToast(`${t.branches}: ${label} ✓`);
+    } catch (error) {
+      console.error('Failed to add branch', error);
+      showToast(t.settingsBranchAddFailed, 'error');
+    }
+  };
+
+  const handleBranchColor = async (branch, color) => {
+    // Optimistic update, then persist
+    setBranches((prev) => prev.map((b) => (b.id === branch.id ? { ...b, color } : b)));
+    try {
+      await updateBranch({ id: branch.id, color });
+    } catch (error) {
+      console.error('Failed to update branch color', error);
+      showToast(t.settingsBranchUpdateFailed, 'error');
+      await refreshBranches();
+    }
+  };
+
+  const handleDeleteBranch = async (id) => {
+    if (!confirm(t.settingsBranchDeleteConfirm)) return;
+    try {
+      await deleteBranch({ id });
+      await refreshBranches();
+      showToast(`${t.branches} ✓`);
+    } catch (error) {
+      console.error('Failed to delete branch', error);
+      showToast(t.settingsBranchDeleteFailed, 'error');
+    }
+  };
+
+  // Pick an image and store it uncropped (aspect preserved, downscaled to
+  // fit 512px) as a draft — it is persisted with "Save settings". The app
+  // also letterboxes it into an .ico for the browser tab.
+  const handleLogoFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file
+    if (!file) return;
+    if (isImageFileTooLarge(file)) {
+      showToast(t.logoFileTooLarge, 'error');
+      return;
+    }
+    try {
+      setLogoUrl(await fileToLogoDataUrl(file));
+    } catch (error) {
+      console.error('Failed to read logo file', error);
+      showToast(t.logoFileInvalid, 'error');
+    }
+  };
+
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
       await updateTenant({
         tenantId,
         name: schoolName.trim(),
+        logoUrl,
       });
       await loadTenant(tenantId);
       showToast(`${t.settingsSaved} ✓`);
@@ -216,6 +403,45 @@ export default function SettingsPage({ showToast, t }) {
                 placeholder={t.settingsSchoolNamePlaceholder}
               />
             </Field>
+
+            {/* Logo — shown in the menu and as the browser (.ico) icon */}
+            <Field label={t.logoUpload}>
+              <div className="flex items-center gap-3">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={t.logoUpload}
+                    className="h-14 min-w-0 flex-1 rounded-lg border border-line object-contain"
+                  />
+                ) : (
+                  <div className="grid h-14 min-w-0 flex-1 place-items-center rounded-lg border border-dashed border-line text-muted">
+                    <Car size={20} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <div>
+                    <Button small onClick={() => logoInputRef.current?.click()}>
+                      <ImagePlus size={14} />
+                      {logoUrl ? t.logoChangeAction : t.logoUploadAction}
+                    </Button>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoFile}
+                    />
+                  </div>
+                  {logoUrl && (
+                    <Button small onClick={() => setLogoUrl(null)}>
+                      <Trash2 size={14} />
+                      {t.delete}
+                    </Button>
+                  )}
+                  <span className="text-[11px] text-muted">{t.logoUploadHint}</span>
+                </div>
+              </div>
+            </Field>
           </div>
         </Card>
 
@@ -226,36 +452,15 @@ export default function SettingsPage({ showToast, t }) {
                 <span className="text-sm text-muted">—</span>
               ) : (
                 highways.map((hw) => (
-                  <span
-                    key={hw.id}
-                    className="inline-flex items-center gap-1 rounded-full border border-brand-mid bg-brand-light px-2.5 py-1 text-xs text-brand-mid"
-                  >
-                    {hw.name}
-                    <button
-                      type="button"
-                      className="ml-0.5 inline-flex items-center justify-center rounded-full hover:text-accent"
-                      title={t.settingsRemove}
-                      onClick={() => handleDeleteHighway(hw.id)}
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
+                  <CatalogChip key={hw.id} label={hw.name} t={t} onDelete={() => handleDeleteHighway(hw.id)} />
                 ))
               )}
             </div>
-            <div className="flex gap-2">
-              <input
-                className={fieldClass}
-                placeholder={t.addHighwayPlaceholder}
-                value={newHighway}
-                onChange={(e) => setNewHighway(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddHighway(); }}
-              />
-              <Button primary onClick={handleAddHighway}>
-                <span>+</span>
-                {t.addHighway}
-              </Button>
-            </div>
+            <CatalogAddRow
+              placeholder={t.addHighwayPlaceholder}
+              onAdd={handleAddHighway}
+              addLabel={t.add}
+            />
           </div>
         </Card>
       </TwoColumnGrid>
@@ -306,35 +511,105 @@ export default function SettingsPage({ showToast, t }) {
                           </button>
                         </span>
                       ) : (
-                        <span
+                        <CatalogChip
                           key={maneuver.id}
-                          className="inline-flex items-center gap-1 rounded-full border border-brand-mid bg-brand-light px-2.5 py-1 text-xs text-brand-mid"
-                        >
-                          {maneuver.name}
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center rounded-full hover:text-accent"
-                            title={t.edit}
-                            onClick={() => handleManeuverRenameStart(maneuver)}
-                          >
-                            <Pencil size={11} />
-                          </button>
-                        </span>
+                          label={maneuver.name}
+                          t={t}
+                          onRename={() => handleManeuverRenameStart(maneuver)}
+                          onDelete={() => handleDeleteManeuver(maneuver.id)}
+                        />
                       ),
                     )}
                   </div>
                 </div>
               ))
             )}
+
+            {/* Add maneuver: type + name */}
+            <div className="flex items-center gap-2 border-t border-line pt-3">
+              <select
+                className={`${fieldClass} w-auto`}
+                value={newManeuverType}
+                onChange={(e) => setNewManeuverType(e.target.value)}
+              >
+                {maneuverTypes.map((type) => (
+                  <option key={type.id} value={type.id}>{type.name}</option>
+                ))}
+              </select>
+              <input
+                className={fieldClass}
+                placeholder={t.settingsManeuverNamePlaceholder}
+                value={newManeuverName}
+                onChange={(e) => setNewManeuverName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddManeuver(); }}
+              />
+              <Button primary onClick={handleAddManeuver}>
+                <Plus size={14} />
+                {t.add}
+              </Button>
+            </div>
           </div>
         </Card>
-        <Card title={t.errorTagCatalog}>
-          <div className="flex flex-wrap gap-1.5 p-4">
-            {errorTags.map((tag) => (
-              <Tag key={tag.id} passive error active>{tag.label}</Tag>
-            ))}
-          </div>
-        </Card>
+
+        <div className="space-y-3.5">
+          <Card title={t.categories}>
+            <div className="p-4">
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {categories.length === 0 ? (
+                  <span className="text-sm text-muted">—</span>
+                ) : (
+                  categories.map((cat) => (
+                    <CatalogChip key={cat.id} label={cat.label} t={t} onDelete={() => handleDeleteCategory(cat.id)} />
+                  ))
+                )}
+              </div>
+              <CatalogAddRow
+                placeholder={t.settingsCategoryPlaceholder}
+                onAdd={handleAddCategory}
+                addLabel={t.add}
+              />
+            </div>
+          </Card>
+
+          <Card title={t.branches}>
+            <div className="p-4">
+              <div className="mb-3 space-y-1.5">
+                {branches.length === 0 ? (
+                  <span className="text-sm text-muted">—</span>
+                ) : (
+                  branches.map((branch) => (
+                    <div key={branch.id} className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-line bg-white p-0.5"
+                        value={branch.color || '#2563eb'}
+                        onChange={(e) => handleBranchColor(branch, e.target.value)}
+                        title={t.colorLabel}
+                      />
+                      <span className="text-sm font-medium">{branch.label}</span>
+                      <button
+                        type="button"
+                        className="ml-auto rounded p-1 text-muted hover:bg-red-50 hover:text-accent"
+                        title={t.delete}
+                        onClick={() => handleDeleteBranch(branch.id)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <CatalogAddRow
+                placeholder={t.settingsBranchPlaceholder}
+                withColor
+                color={newBranchColor}
+                onColorChange={setNewBranchColor}
+                onAdd={handleAddBranch}
+                addLabel={t.add}
+              />
+            </div>
+          </Card>
+        </div>
       </TwoColumnGrid>
     </Page>
   );

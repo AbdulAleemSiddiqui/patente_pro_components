@@ -1,44 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Eye } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import {
-  Card, Page, PageHeader, ProgressBar, SignalLights,
+  Badge, Button, Card, Page, PageHeader, ProgressBar,
 } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
-import { listUsers, listLessonsWithFeedback } from '../lib/api.js';
+import { listUsers, listBranches, getStudentProgressStats, listLessonsLite } from '../lib/api.js';
 
-// Map general_rating (poor/fair/good) onto a 1–3 scale for averaging
-const RATING_VALUE = { poor: 1, fair: 2, good: 3 };
-// Inverse: a numeric average back to a signal-light rating
-const VALUE_TO_RATING = { 1: 'poor', 2: 'fair', 3: 'good' };
+// Client-side page size for the student table
+const PAGE_SIZE = 25;
 
-function avgGeneralRating(lessons) {
-  const vals = lessons
-    .map((l) => l.feedback?.general_rating)
-    .filter((r) => r && RATING_VALUE[r] != null)
-    .map((r) => RATING_VALUE[r]);
-  if (!vals.length) return null;
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
-}
-
-// Per-student summary derived from their lessons
-function summarize(lessons) {
-  const active = lessons.filter((l) => l.status !== 'cancelled');
-  const completed = active.filter((l) => l.status === 'completed');
-  const pending = active.filter((l) => l.status === 'scheduled');
-  const avg = avgGeneralRating(completed);
-  // Map the 1–3 rating average onto a 0–100 progress percentage
-  const percent = avg == null ? null : Math.round(((avg - 1) / 2) * 100);
-  return {
-    total: active.length,
-    completed: completed.length,
-    pending: pending.length,
-    avg,
-    percent,
-  };
-}
-
-function fmtLesson(iso) {
+function fmtDateTime(iso) {
   try {
     return format(parseISO(iso), 'dd/MM/yyyy · HH:mm');
   } catch {
@@ -46,33 +18,22 @@ function fmtLesson(iso) {
   }
 }
 
-// Average maneuver ratings grouped by their parent type (FASE 1 / FASE 2 / …)
-// NB: maneuver_ratings.rating is text ('poor'|'fair'|'good'), mapped to 1/3/5.
-// `feedback` is a single object (lesson_feedback.lesson_id is UNIQUE → to-one).
-function tipologiaAverages(feedback) {
-  const ratings = feedback?.ratings || [];
-  const byType = {};
-  for (const r of ratings) {
-    const type = r.maneuver?.type;
-    const val = RATING_VALUE[r.rating];
-    if (!type || val == null) continue;
-    const key = type.name;
-    (byType[key] ||= { name: type.name, order: type.order_index ?? 99, sum: 0, count: 0 });
-    byType[key].sum += val;
-    byType[key].count += 1;
-  }
-  return Object.values(byType)
-    .map((g) => ({ name: g.name, order: g.order, avg: g.sum / g.count }))
-    .sort((a, b) => a.order - b.order);
-}
-
-export default function StudentsPage({ t }) {
+// Overall stats stay top-level; clicking a student expands their lesson list,
+// and picking a feedback-done lesson opens the read-only Log Lessons view.
+// Stats come from the get_student_progress SQL function — no heavy payloads.
+export default function StudentsPage({ t, navigate }) {
   const { tenantId } = useAuthStore();
   const [students, setStudents] = useState([]);
-  const [lessons, setLessons] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [progressByStudent, setProgressByStudent] = useState({});
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0); // 0-based, client-side
   const [loading, setLoading] = useState(true);
+
+  // Selected student + their lesson list (fetched on selection)
+  const [selectedId, setSelectedId] = useState(null);
+  const [studentLessons, setStudentLessons] = useState([]);
+  const [loadingLessons, setLoadingLessons] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -81,12 +42,18 @@ export default function StudentsPage({ t }) {
           setLoading(false);
           return;
         }
-        const [studentData, lessonData] = await Promise.all([
+        const [studentData, branchData, progressData] = await Promise.all([
           listUsers({ tenantId, role: 'student' }),
-          listLessonsWithFeedback({ tenantId }),
+          listBranches({ tenantId }),
+          getStudentProgressStats({ tenantId }),
         ]);
         setStudents(studentData || []);
-        setLessons(lessonData || []);
+        setBranches(branchData || []);
+        const map = {};
+        for (const row of progressData || []) {
+          map[row.student_id] = row;
+        }
+        setProgressByStudent(map);
       } catch (error) {
         console.error('Failed to load students', error);
       } finally {
@@ -95,16 +62,42 @@ export default function StudentsPage({ t }) {
     })();
   }, [tenantId]);
 
-  // lessons grouped by student id
-  const lessonsByStudent = useMemo(() => {
-    const map = {};
-    for (const l of lessons) {
-      (map[l.student_id] ||= []).push(l);
+  // Load the selected student's lessons (light query, newest first)
+  useEffect(() => {
+    if (!selectedId || !tenantId) {
+      setStudentLessons([]);
+      return;
     }
-    return map;
-  }, [lessons]);
+    let cancelled = false;
+    (async () => {
+      setLoadingLessons(true);
+      try {
+        const rows = await listLessonsLite({ tenantId, studentId: selectedId });
+        if (!cancelled) setStudentLessons(rows || []);
+      } catch (error) {
+        console.error('Failed to load student lessons', error);
+      } finally {
+        if (!cancelled) setLoadingLessons(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedId, tenantId]);
 
-  const selected = students.find((s) => s.id === selectedId) || null;
+  const toggleStudent = (id) => {
+    setSelectedId((prev) => (prev === id ? null : id));
+  };
+
+  const openLessonHistory = (lesson) => {
+    sessionStorage.setItem('viewLesson', JSON.stringify({ lessonId: lesson.id }));
+    navigate('log');
+  };
+
+  const branchColor = (label) => branches.find((b) => b.label === label)?.color;
+
+  // Map the 1–3 rating average onto 0–100 (same formula as before, applied to
+  // the server-computed average)
+  const percentOf = (row) =>
+    row?.avg_rating == null ? null : Math.round(((Number(row.avg_rating) - 1) / 2) * 100);
 
   // Filter by name or phone, case-insensitive
   const filteredStudents = useMemo(() => {
@@ -116,6 +109,12 @@ export default function StudentsPage({ t }) {
         s.phone?.toLowerCase().includes(q),
     );
   }, [students, query]);
+
+  // Reset to the first page whenever the search narrows the list
+  useEffect(() => { setPage(0); }, [query]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredStudents.length / PAGE_SIZE));
+  const pageStudents = filteredStudents.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   if (loading) {
     return (
@@ -161,34 +160,40 @@ export default function StudentsPage({ t }) {
                   <td colSpan={5} className="px-4 py-10 text-center text-muted">{t.studentsNotFound}</td>
                 </tr>
               ) : (
-                filteredStudents.map((s) => {
-                  const stats = summarize(lessonsByStudent[s.id] || []);
-                  const isActive = selectedId === s.id;
+                pageStudents.map((s) => {
+                  const stats = progressByStudent[s.id] || {};
+                  const percent = percentOf(stats);
+                  const isSelected = selectedId === s.id;
                   return (
                     <tr
                       key={s.id}
-                      onClick={() => setSelectedId(s.id)}
+                      onClick={() => toggleStudent(s.id)}
                       className={`cursor-pointer border-b border-line last:border-0 transition hover:bg-[#fafafa] ${
-                        isActive ? 'bg-[#f0f6ff]' : ''
+                        isSelected ? 'bg-brand-light' : ''
                       }`}
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium">{s.full_name}</div>
+                        <div
+                          className="font-medium"
+                          style={branchColor(s.branch) ? { color: branchColor(s.branch) } : undefined}
+                        >
+                          {s.full_name}
+                        </div>
                         <div className="mt-0.5 text-[11px] text-muted">{s.phone || '—'}</div>
                       </td>
-                      <td className="px-4 py-3">{stats.total}</td>
-                      <td className="px-4 py-3 text-success">{stats.completed}</td>
-                      <td className="px-4 py-3 text-warn">{stats.pending}</td>
+                      <td className="px-4 py-3">{Number(stats.total) || 0}</td>
+                      <td className="px-4 py-3 text-success">{Number(stats.completed) || 0}</td>
+                      <td className="px-4 py-3 text-warn">{Number(stats.pending) || 0}</td>
                       <td className="px-4 py-3">
-                        {stats.percent == null ? (
+                        {percent == null ? (
                           <span className="text-[11px] text-muted">—</span>
                         ) : (
                           <div className="flex items-center gap-2">
                             <ProgressBar
-                              percent={stats.percent}
-                              tone={stats.percent >= 67 ? 'good' : stats.percent >= 34 ? 'warn' : ''}
+                              percent={percent}
+                              tone={percent >= 67 ? 'good' : percent >= 34 ? 'warn' : ''}
                             />
-                            <span className="w-9 text-[11px] text-muted">{stats.percent}%</span>
+                            <span className="w-9 text-[11px] text-muted">{percent}%</span>
                           </div>
                         )}
                       </td>
@@ -199,143 +204,76 @@ export default function StudentsPage({ t }) {
             </tbody>
           </table>
         </div>
+
+        {/* Pager — client-side slice of the loaded students */}
+        <div className="flex items-center justify-between border-t border-line px-4 py-2 text-xs text-muted">
+          <span>
+            {t.showingRange
+              .replace('{from}', filteredStudents.length === 0 ? 0 : page * PAGE_SIZE + 1)
+              .replace('{to}', Math.min((page + 1) * PAGE_SIZE, filteredStudents.length))
+              .replace('{total}', filteredStudents.length)}
+          </span>
+          <div className="flex gap-2">
+            <Button small disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+              {t.prev}
+            </Button>
+            <Button small disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>
+              {t.next}
+            </Button>
+          </div>
+        </div>
       </Card>
 
-      {/* Inline detail panel — appears below the list when a student is selected */}
-      {selected && (
-        <StudentDetail
-          student={selected}
-          lessons={lessonsByStudent[selected.id] || []}
-          t={t}
-          onClose={() => setSelectedId(null)}
-        />
+      {/* Selected student's lesson list → pick a feedback-done lesson for the read-only view */}
+      {selectedId && (
+        <Card
+          title={`${students.find((s) => s.id === selectedId)?.full_name || ''} — ${t.lessons}`}
+          action={
+            <button onClick={() => setSelectedId(null)} className="text-xs text-muted hover:text-ink">
+              {t.close}
+            </button>
+          }
+        >
+          {loadingLessons ? (
+            <div className="px-4 py-8 text-center text-sm text-muted">{t.loadingDots}</div>
+          ) : studentLessons.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-muted">{t.noLessonsLogged}</div>
+          ) : (
+            <div className="max-h-[320px] overflow-auto">
+              {studentLessons.map((lesson) => {
+                const done = lesson.status === 'completed';
+                const cancelled = lesson.status === 'cancelled';
+                return (
+                  <button
+                    key={lesson.id}
+                    disabled={!done}
+                    onClick={() => openLessonHistory(lesson)}
+                    className={`flex w-full items-center justify-between border-b border-line px-4 py-2.5 text-[13px] transition last:border-b-0 ${
+                      done ? 'hover:bg-[#fafafa]' : 'cursor-default opacity-70'
+                    }`}
+                  >
+                    <span className={cancelled ? 'line-through text-muted' : 'font-medium'}>
+                      {fmtDateTime(lesson.scheduled_at)}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {done ? (
+                        <>
+                          <Badge tone="green">{t.feedbackDone}</Badge>
+                          <Eye size={14} className="text-muted" />
+                        </>
+                      ) : cancelled ? (
+                        <Badge tone="muted">{t.cancelled}</Badge>
+                      ) : (
+                        <Badge tone="warn">{t.feedbackPending}</Badge>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
       )}
     </Page>
-  );
-}
-
-function StudentDetail({ student, lessons, t, onClose }) {
-  // Logged lessons (completed / have feedback), most recent first
-  const logged = useMemo(
-    () => lessons
-      .filter((l) => l.status === 'completed' || l.feedback)
-      .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at)),
-    [lessons],
-  );
-
-  const [activeLessonId, setActiveLessonId] = useState(null);
-  const active = logged.find((l) => l.id === activeLessonId) || logged[0] || null;
-
-  return (
-    <Card
-      title={`${student.full_name} — ${t.profileDetail}`}
-      action={
-        <button onClick={onClose} className="text-xs text-muted hover:text-ink">{t.close}</button>
-      }
-    >
-      <div className="flex flex-col md:flex-row">
-        {/* Left: scrollable lesson list */}
-        <aside className="w-full shrink-0 border-b border-line bg-[#fafafa] md:w-1/4 md:border-b-0 md:border-r lg:w-1/5">
-          <div className="px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-muted">
-            {t.lessons}
-          </div>
-          {/* Show ~3 lessons, then scroll */}
-          <div className="max-h-[108px] overflow-y-auto">
-            {logged.length === 0 ? (
-              <div className="px-3 py-4 text-xs text-muted">{t.noLessonsLogged}</div>
-            ) : (
-              logged.map((l) => (
-                <button
-                  key={l.id}
-                  onClick={() => setActiveLessonId(l.id)}
-                  className={`flex h-9 w-full items-center border-l-2 px-3 text-left text-xs transition ${
-                    active?.id === l.id
-                      ? 'border-brand bg-white font-medium text-ink'
-                      : 'border-transparent text-muted hover:bg-white/60'
-                  }`}
-                >
-                  {fmtLesson(l.scheduled_at)}
-                </button>
-              ))
-            )}
-          </div>
-        </aside>
-
-        {/* Right: feedback detail */}
-        <section className="min-w-0 flex-1 p-4">
-          {!active ? (
-            <div className="py-12 text-center text-sm text-muted">{t.selectLesson}</div>
-          ) : (
-            <LessonFeedback lesson={active} t={t} />
-          )}
-        </section>
-      </div>
-    </Card>
-  );
-}
-
-function LessonFeedback({ lesson, t }) {
-  const feedback = lesson.feedback || null;
-
-  if (!feedback) {
-    return <div className="py-12 text-center text-sm text-muted">{t.noFeedback}</div>;
-  }
-
-  const tipologie = tipologiaAverages(lesson.feedback);
-
-  return (
-    <div className="space-y-5">
-      {/* General rating */}
-      <div>
-        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.generalRating}</div>
-        <div className="flex items-center gap-2">
-          <SignalLights value={feedback.general_rating} />
-          <span className="text-xs capitalize text-muted">{feedback.general_rating || '—'}</span>
-        </div>
-      </div>
-
-      {/* Notes */}
-      <div>
-        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.instructorNotes}</div>
-        <div className="rounded-md border border-line bg-[#fafafa] p-3 text-sm">
-          {feedback.notes ? feedback.notes : <span className="text-muted">—</span>}
-        </div>
-      </div>
-
-      {/* Tipologia */}
-      <div>
-        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.tipologia}</div>
-        <div className="space-y-1.5">
-          {tipologie.length === 0 ? (
-            <div className="text-sm text-muted">—</div>
-          ) : (
-            tipologie.map((g) => (
-              <div key={g.name} className="flex items-center justify-between gap-3 text-sm">
-                <span>{g.name}</span>
-                <div className="flex items-center gap-2">
-                  <SignalLights value={VALUE_TO_RATING[Math.round(g.avg)] || 'fair'} />
-                  <span className="w-7 text-[11px] text-muted">{g.avg.toFixed(1)}</span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Autostrada */}
-      <div>
-        <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.autostradaSection}</div>
-        <div className="flex flex-wrap gap-6 text-sm">
-          <div>
-            <span className="text-muted">{t.fromLabel}: </span>
-            <span className="font-medium">{feedback.from_highway?.name || '—'}</span>
-          </div>
-          <div>
-            <span className="text-muted">{t.toLabel}: </span>
-            <span className="font-medium">{feedback.to_highway?.name || '—'}</span>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }

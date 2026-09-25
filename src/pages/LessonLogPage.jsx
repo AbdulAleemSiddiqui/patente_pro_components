@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { Save, Plus, Trash2, ArrowLeft } from 'lucide-react';
 import { format, addMinutes, parseISO } from 'date-fns';
 import {
-  Button, Card, Field, fieldClass, Page, PageHeader,
+  Button, Card, Field, fieldClass, Page, PageHeader, Combobox,
 } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
 import {
-  listUsers, listLessons, listManeuvers, listHighways, submitLessonFeedback,
+  listUsers, listLessonsLite, listManeuvers, listHighways, submitLessonFeedback,
+  listLessonsWithFeedback, listBranches,
 } from '../lib/api.js';
 
 function toggleSet(setter, key) {
@@ -16,6 +17,9 @@ function toggleSet(setter, key) {
     return next;
   });
 }
+
+// One empty From/To row for the highway (Autostrada) picker
+const emptyHighwayRow = () => ({ from: '', to: '' });
 
 // Format a lesson as "dd/MM/yyyy - HH:mm to HH:mm"
 function formatLessonLabel(lesson) {
@@ -29,18 +33,20 @@ export default function LessonLogPage({ showToast, t, navigate }) {
   const [students, setStudents] = useState([]);
   const [manoeuvres, setManoeuvres] = useState([]);
   const [highways, setHighways] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [lessons, setLessons] = useState([]); // lessons for the selected student
 
   // Cascading selection state
   const [studentId, setStudentId] = useState('');
   const [selectedLesson, setSelectedLesson] = useState(null); // full lesson object
-  const [prefilled, setPrefilled] = useState(false); // opened from calendar
+  const [prefilled, setPrefilled] = useState(false); // opened with a lesson preset
+  const [readOnly, setReadOnly] = useState(false); // history view — no editing
 
   // Feedback state
   const [notes, setNotes] = useState('');
   const [generalRating, setGeneralRating] = useState('good'); // 'poor', 'fair', 'good'
-  const [fromHighwayId, setFromHighwayId] = useState('');
-  const [toHighwayId, setToHighwayId] = useState('');
+  // A single lesson can cover several highway segments (client request 2026-09-23)
+  const [highwayRows, setHighwayRows] = useState([emptyHighwayRow()]);
 
   // Manoeuvre state
   const [selectedManoeuvres, setSelectedManoeuvres] = useState(new Set());
@@ -60,20 +66,22 @@ export default function LessonLogPage({ showToast, t, navigate }) {
         const isTeacher = role === 'teacher';
         const teacherId = isTeacher ? session?.user?.id : undefined;
 
-        const [studentsData, manoeuvresData, highwaysData, teacherLessons] = await Promise.all([
+        const [studentsData, manoeuvresData, highwaysData, branchData, teacherLessons] = await Promise.all([
           listUsers({ tenantId, role: 'student' }),
           listManeuvers({ tenantId }),
           listHighways({ tenantId }),
-          // Teachers only see students who have at least one loggable lesson with them
-          teacherId ? listLessons({ tenantId, teacherId }) : Promise.resolve(null),
+          listBranches({ tenantId }),
+          // Teachers only see students who have at least one loggable lesson
+          // with them — light query, ids are all we need here
+          teacherId
+            ? listLessonsLite({ tenantId, teacherId, status: 'scheduled', kind: 'lesson' })
+            : Promise.resolve(null),
         ]);
 
         if (teacherId) {
           // Only students with a still-scheduled lesson with this teacher are pickable
           const eligibleStudentIds = new Set(
-            (teacherLessons || [])
-              .filter((l) => l.status === 'scheduled' && l.kind === 'lesson')
-              .map((l) => l.student_id),
+            (teacherLessons || []).map((l) => l.student_id),
           );
           setStudents((studentsData || []).filter((s) => eligibleStudentIds.has(s.id)));
         } else {
@@ -81,6 +89,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
         }
         setManoeuvres(manoeuvresData || []);
         setHighways(highwaysData || []);
+        setBranches(branchData || []);
       } catch (error) {
         console.error('Failed to load data', error);
       } finally {
@@ -112,22 +121,76 @@ export default function LessonLogPage({ showToast, t, navigate }) {
     }
   }, []);
 
-  // When student changes (case b), fetch that student's lessons
+  // Case b: opened as a read-only history view from the lessons list.
+  // NB: the sessionStorage key is removed only AFTER the load completes —
+  // StrictMode runs effects twice, and removing it up-front blanked the view.
   useEffect(() => {
-    // Skip fetch in prefilled mode — lesson is already known
-    if (prefilled || !studentId || !tenantId) return;
+    const viewLesson = sessionStorage.getItem('viewLesson');
+    if (!viewLesson || !tenantId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const lessonData = JSON.parse(viewLesson);
+        const [lesson] = await listLessonsWithFeedback({ tenantId, lessonId: lessonData.lessonId });
+        if (cancelled) return;
+        sessionStorage.removeItem('viewLesson');
+        if (!lesson) {
+          showToast(t.llLessonNotFound, 'error');
+          return;
+        }
+        setReadOnly(true);
+        setPrefilled(true);
+        setStudentId(lesson.student_id || '');
+        setSelectedLesson({
+          id: lesson.id,
+          student_id: lesson.student_id,
+          teacher_id: lesson.teacher_id,
+          scheduled_at: lesson.scheduled_at,
+          duration_minutes: lesson.duration_minutes,
+          teacherName: lesson.teacher?.full_name,
+          studentName: lesson.student?.full_name,
+        });
+        setNotes(lesson.feedback?.notes || '');
+        setGeneralRating(lesson.feedback?.general_rating || 'good');
+        const segments = [...(lesson.feedback?.segments || [])].sort(
+          (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+        );
+        setHighwayRows(segments.length
+          ? segments.map((s) => ({ from: s.from_highway?.id || '', to: s.to_highway?.id || '' }))
+          : [emptyHighwayRow()]);
+        const ratings = {};
+        const selected = new Set();
+        for (const r of lesson.feedback?.ratings || []) {
+          ratings[r.maneuver_id] = r.rating;
+          selected.add(r.maneuver_id);
+        }
+        setManoeuvreRatings(ratings);
+        setSelectedManoeuvres(selected);
+      } catch (error) {
+        console.error('Failed to load lesson history:', error);
+        showToast(t.llLessonNotFound, 'error');
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
+
+  // When student changes, fetch that student's lessons
+  useEffect(() => {
+    // Skip fetch in prefilled/read-only mode — lesson is already known
+    if (prefilled || readOnly || !studentId || !tenantId) return;
     let cancelled = false;
     (async () => {
       setLoadingLessons(true);
       try {
-        // Teachers only see their own lessons; admins see all (matches calendar behaviour)
+        // Teachers only see their own lessons; admins see all.
+        // Filtered + sorted server-side via the light query.
         const teacherId = role === 'teacher' ? session?.user?.id : undefined;
-        const data = await listLessons({ tenantId, studentId, teacherId });
+        const data = await listLessonsLite({
+          tenantId, studentId, teacherId, status: 'scheduled', kind: 'lesson',
+        });
         if (cancelled) return;
-        const visible = (data || [])
-          .filter((l) => l.status === 'scheduled' && l.kind === 'lesson')
-          .sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
-        setLessons(visible);
+        setLessons(data || []);
       } catch (error) {
         console.error('Failed to load lessons', error);
       } finally {
@@ -135,16 +198,32 @@ export default function LessonLogPage({ showToast, t, navigate }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [studentId, tenantId, prefilled, role, session]);
+  }, [studentId, tenantId, prefilled, readOnly, role, session]);
 
   const handleStudentChange = (id) => {
+    if (readOnly) return;
     setStudentId(id);
     setSelectedLesson(null); // reset downstream selection
   };
 
   const handleLessonChange = (lessonId) => {
+    if (readOnly) return;
     const lesson = lessons.find((l) => l.id === lessonId) || null;
     setSelectedLesson(lesson);
+    setHighwayRows([emptyHighwayRow()]); // reset segments for the new lesson
+  };
+
+  const handleHighwayRowChange = (index, side, value) => {
+    setHighwayRows((prev) => prev.map((row, i) => (i === index ? { ...row, [side]: value } : row)));
+  };
+
+  const addHighwayRow = () => setHighwayRows((prev) => [...prev, emptyHighwayRow()]);
+
+  const removeHighwayRow = (index) => {
+    setHighwayRows((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length ? next : [emptyHighwayRow()];
+    });
   };
 
   const handleManoeuvreRating = (manoeuvreId, rating) => {
@@ -156,6 +235,12 @@ export default function LessonLogPage({ showToast, t, navigate }) {
 
   const lessonLocked = !!selectedLesson; // gates the rest of the form
   const duration = selectedLesson?.duration_minutes ?? '';
+
+  // Branch color for a student (branches managed in Settings)
+  const branchColorOf = (studentId) => {
+    const branch = students.find((s) => s.id === studentId)?.branch;
+    return branches.find((b) => b.label === branch)?.color;
+  };
 
   const handleSubmit = async () => {
     try {
@@ -173,18 +258,20 @@ export default function LessonLogPage({ showToast, t, navigate }) {
         lesson_id: selectedLesson.id,
         notes: notes || '',
         general_rating: generalRating,
-        from_highway_id: fromHighwayId || null,
-        to_highway_id: toHighwayId || null,
       };
 
       await submitLessonFeedback({
         feedback: feedbackData,
+        highwaySegments: highwayRows.map((row) => ({
+          from_highway_id: row.from || null,
+          to_highway_id: row.to || null,
+        })),
         maneuverRatings: maneuverRatingsData,
       });
 
       showToast(t.llFeedbackSaved);
       sessionStorage.removeItem('feedbackLesson');
-      navigate(prefilled ? 'schedule' : 'dashboard');
+      navigate('dashboard');
     } catch (error) {
       console.error('Failed to save feedback:', error);
       showToast(t.llFeedbackSaveFailed, 'error');
@@ -220,7 +307,16 @@ export default function LessonLogPage({ showToast, t, navigate }) {
 
   return (
     <Page>
-      <PageHeader title={t.log} subtitle={t.logSub} />
+      <PageHeader
+        title={readOnly ? t.llHistoryTitle : t.log}
+        subtitle={readOnly ? t.llHistorySub : t.logSub}
+        action={readOnly ? (
+          <Button onClick={() => navigate(role === 'admin' ? 'lessonsAdmin' : 'students')}>
+            <ArrowLeft size={16} />
+            {t.back}
+          </Button>
+        ) : undefined}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* Left Column - Lesson Details */}
@@ -235,41 +331,33 @@ export default function LessonLogPage({ showToast, t, navigate }) {
               )}
 
               <Field label={t.student}>
-                <select
-                  className={fieldClass}
+                <Combobox
                   value={studentId}
-                  onChange={(e) => handleStudentChange(e.target.value)}
-                  disabled={prefilled}
-                >
-                  <option value="">{t.llSelectStudent}</option>
-                  {students.map((student) => (
-                    <option key={student.id} value={student.id}>
-                      {student.full_name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleStudentChange}
+                  options={students.map((student) => ({
+                    value: student.id,
+                    label: student.full_name,
+                    color: branchColorOf(student.id),
+                  }))}
+                  placeholder={t.llSelectStudent}
+                  disabled={prefilled || readOnly}
+                />
               </Field>
 
               <Field label={t.llLessonLabel}>
-                <select
-                  className={fieldClass}
+                <Combobox
                   value={selectedLesson?.id || ''}
-                  onChange={(e) => handleLessonChange(e.target.value)}
-                  disabled={prefilled || !studentId || loadingLessons}
-                >
-                  <option value="">
-                    {loadingLessons ? t.loadingDots : !studentId ? t.llSelectStudentFirst : t.llSelectLesson}
-                  </option>
-                  {prefilled && selectedLesson ? (
-                    <option value={selectedLesson.id}>{formatLessonLabel(selectedLesson)}</option>
-                  ) : (
-                    lessons.map((lesson) => (
-                      <option key={lesson.id} value={lesson.id}>
-                        {formatLessonLabel(lesson)}
-                      </option>
-                    ))
-                  )}
-                </select>
+                  onChange={handleLessonChange}
+                  options={
+                    prefilled && selectedLesson
+                      ? [{ value: selectedLesson.id, label: formatLessonLabel(selectedLesson) }]
+                      : lessons.map((lesson) => ({ value: lesson.id, label: formatLessonLabel(lesson) }))
+                  }
+                  placeholder={
+                    loadingLessons ? t.loadingDots : !studentId ? t.llSelectStudentFirst : t.llSelectLesson
+                  }
+                  disabled={prefilled || readOnly || !studentId || loadingLessons}
+                />
               </Field>
 
               <Field label={t.duration}>
@@ -282,38 +370,61 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                 />
               </Field>
 
-              {/* Autostrada (highways) picker */}
+              {/* Autostrada (highway segments) picker — one lesson can cover several */}
               <div className="rounded-md border border-line p-3">
-                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-                  {t.highway}
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted">
+                    {t.highway}
+                  </div>
+                  {!readOnly && (
+                    <Button small primary onClick={addHighwayRow} disabled={!lessonLocked} aria-label={t.add}>
+                      <Plus size={13} />
+                    </Button>
+                  )}
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label={`${t.highway}: ${t.toLabel}`}>
-                    <select
-                      className={fieldClass}
-                      value={toHighwayId}
-                      onChange={(e) => setToHighwayId(e.target.value)}
-                      disabled={!lessonLocked}
-                    >
-                      <option value="">—</option>
-                      {highways.map((hw) => (
-                        <option key={hw.id} value={hw.id}>{hw.name}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label={`${t.highway}: ${t.fromLabel}`}>
-                    <select
-                      className={fieldClass}
-                      value={fromHighwayId}
-                      onChange={(e) => setFromHighwayId(e.target.value)}
-                      disabled={!lessonLocked}
-                    >
-                      <option value="">—</option>
-                      {highways.map((hw) => (
-                        <option key={hw.id} value={hw.id}>{hw.name}</option>
-                      ))}
-                    </select>
-                  </Field>
+                <div className="space-y-3">
+                  {highwayRows.map((row, index) => (
+                    // eslint-disable-next-line react/no-array-index-key
+                    <div key={index} className="flex items-end gap-2">
+                      <Field label={index === 0 ? `${t.highway}: ${t.fromLabel}` : undefined}>
+                        <select
+                          className={fieldClass}
+                          value={row.from}
+                          onChange={(e) => handleHighwayRowChange(index, 'from', e.target.value)}
+                          disabled={!lessonLocked || readOnly}
+                        >
+                          <option value="">—</option>
+                          {highways.map((hw) => (
+                            <option key={hw.id} value={hw.id}>{hw.name}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label={index === 0 ? `${t.highway}: ${t.toLabel}` : undefined}>
+                        <select
+                          className={fieldClass}
+                          value={row.to}
+                          onChange={(e) => handleHighwayRowChange(index, 'to', e.target.value)}
+                          disabled={!lessonLocked || readOnly}
+                        >
+                          <option value="">—</option>
+                          {highways.map((hw) => (
+                            <option key={hw.id} value={hw.id}>{hw.name}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => removeHighwayRow(index)}
+                          disabled={!lessonLocked}
+                          className="mb-0.5 rounded p-2 text-muted transition hover:bg-red-50 hover:text-accent disabled:opacity-40"
+                          title={t.delete}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -323,8 +434,8 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                     <button
                       key={rating}
                       type="button"
-                      onClick={() => setGeneralRating(rating)}
-                      disabled={!lessonLocked}
+                      onClick={() => !readOnly && setGeneralRating(rating)}
+                      disabled={!lessonLocked || readOnly}
                       className={`w-8 h-8 rounded-full border-2 transition ${
                         generalRating === rating
                           ? rating === 'poor' ? 'border-red-500 bg-red-500'
@@ -353,17 +464,19 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                   placeholder={t.notesPlaceholder}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  disabled={!lessonLocked}
+                  disabled={!lessonLocked || readOnly}
                 />
               </Field>
 
               {/* Save button — desktop only; on mobile it sits at the end of tipologia instead */}
-              <div className="hidden justify-end pt-2 lg:flex">
-                <Button primary onClick={handleSubmit} className="max-w-fit" >
-                  <Save size={16} />
-                  {t.saveLesson}
-                </Button>
-              </div>
+              {!readOnly && (
+                <div className="hidden justify-end pt-2 lg:flex">
+                  <Button primary onClick={handleSubmit} className="max-w-fit" >
+                    <Save size={16} />
+                    {t.saveLesson}
+                  </Button>
+                </div>
+              )}
             </div>
           </Card>
         </div>
@@ -395,7 +508,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                               className={`man-item flex items-center justify-between py-2 px-3 rounded-lg cursor-pointer transition border border-black mb-2 ${
                                 isSelected ? 'border-l-4 border-l-[#d4820a] bg-gray-50' : 'hover:bg-gray-50'
                               }`}
-                              onClick={() => toggleSet(setSelectedManoeuvres, manoeuvre.id)}
+                              onClick={() => !readOnly && toggleSet(setSelectedManoeuvres, manoeuvre.id)}
                             >
                               <div className="flex items-center gap-2 flex-1">
                                 <div className="">
@@ -409,7 +522,7 @@ export default function LessonLogPage({ showToast, t, navigate }) {
                                     key={rating}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleManoeuvreRating(manoeuvre.id, rating);
+                                      if (!readOnly) handleManoeuvreRating(manoeuvre.id, rating);
                                     }}
                                     className={`tl-circle rounded-full cursor-pointer transition ${
                                       currentRating === rating
@@ -443,12 +556,14 @@ export default function LessonLogPage({ showToast, t, navigate }) {
               )}
 
               {/* Save button — mobile only: end of tipologia instead of after instructor notes */}
-              <div className="mt-4 flex justify-center lg:hidden">
-                <Button primary onClick={handleSubmit} className="max-w-fit" >
-                  <Save size={16} />
-                  {t.saveLesson}
-                </Button>
-              </div>
+              {!readOnly && (
+                <div className="mt-4 flex justify-center lg:hidden">
+                  <Button primary onClick={handleSubmit} className="max-w-fit" >
+                    <Save size={16} />
+                    {t.saveLesson}
+                  </Button>
+                </div>
+              )}
             </div>
           </Card>
 

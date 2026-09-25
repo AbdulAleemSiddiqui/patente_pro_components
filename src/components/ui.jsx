@@ -1,10 +1,13 @@
 // ─── Shared UI primitives ────────────────────────────────────────────────────
 
+import { useState } from 'react';
+
 export const badgeTone = {
   green: 'bg-success-light text-success',
   warn:  'bg-warn-light text-warn',
   red:   'bg-accent-light text-accent',
   blue:  'bg-brand-light text-brand-mid',
+  muted: 'bg-gray-100 text-gray-500',
 };
 
 export function Badge({ tone = 'blue', children }) {
@@ -18,8 +21,8 @@ export function Badge({ tone = 'blue', children }) {
 export function Button({ children, primary, small, success, onClick, className = '' }) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-3.5 py-2 text-[13px] transition
-        ${small ? 'px-2.5 py-1.5 text-xs' : ''}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] transition
+        ${small ? 'px-2.5 py-1 text-xs' : ''}
         ${primary
           ? 'border-brand bg-brand text-white hover:border-brand-mid hover:bg-brand-mid'
           : success
@@ -96,7 +99,7 @@ export function TwoColumnGrid({ children }) {
 export function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-muted">{label}</span>
+      {label && <span className="mb-1 block text-xs text-muted">{label}</span>}
       {children}
     </label>
   );
@@ -209,3 +212,60 @@ export function Toast({ message }) {
 
 export const fieldClass =
   'w-full rounded-md border border-line bg-white px-2.5 py-2 text-[13px] outline-none focus:border-brand-mid';
+
+/**
+ * Typable dropdown: filter options as you write, click to pick. Use for
+ * lists that can grow long (students, lessons); plain <select> is fine for
+ * a handful of fixed choices. Options may carry a `color` (e.g. branch
+ * color) applied to the selected value and to their rows.
+ */
+export function Combobox({
+  value, onChange, options = [], placeholder, disabled, emptyText = '—',
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = options.find((o) => o.value === value) || null;
+  const filtered = options.filter((o) =>
+    o.label?.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
+  const close = () => { setOpen(false); setQuery(''); };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        className={fieldClass}
+        style={selected?.color ? { color: selected.color } : undefined}
+        disabled={disabled}
+        placeholder={placeholder || ''}
+        value={open ? query : (selected?.label || '')}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => { setQuery(''); setOpen(true); }}
+        onBlur={() => setTimeout(close, 120)}
+      />
+      {open && !disabled && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-line bg-white shadow-lg">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-muted">{emptyText}</div>
+          ) : (
+            filtered.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className={`block w-full px-3 py-2 text-left text-[13px] transition hover:bg-[#f5f5f5] ${
+                  o.value === value ? 'bg-brand-light font-medium' : ''
+                }`}
+                style={o.color ? { color: o.color } : undefined}
+                // mousedown fires before the input's blur, so the pick lands
+                onMouseDown={(e) => { e.preventDefault(); onChange(o.value); close(); }}
+              >
+                {o.label}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

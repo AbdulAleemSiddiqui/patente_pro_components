@@ -6,23 +6,21 @@
 // All available pages and their categories
 export const NAV_ITEMS = [
   // Main section - core functionality
-  { section: 'main',  page: 'dashboard',        icon: 'LayoutDashboard', label: 'Dashboard' },
-  { section: 'main',  page: 'schedule',         icon: 'CalendarDays',      label: 'Calendar' },
-  { section: 'main',  page: 'log',              icon: 'ClipboardList',     label: 'Log lesson' },
+  { section: 'main',        page: 'dashboard',     icon: 'LayoutDashboard', label: 'Database' },
+  { section: 'main',        page: 'students',      icon: 'TrendingUp',      label: 'Student Progress' },
+  { section: 'main',        page: 'lessonsAdmin',  icon: 'CalendarCheck',   label: 'Lessons' },
+  { section: 'main',        page: 'log',           icon: 'ClipboardList',   label: 'Log Lessons' },
 
-  // Admin section - only admins see these
-  { section: 'admin', page: 'users',            icon: 'UserPlus',           label: 'Users' },
-  { section: 'admin', page: 'lessonsAdmin',     icon: 'CalendarCheck',      label: 'Lessons' },
+  // Users section - directory management
+  { section: 'users',       page: 'studentsAdmin', icon: 'Users',           label: 'Students' },
+  { section: 'users',       page: 'teachers',      icon: 'UserPlus',        label: 'Teachers' },
 
-  // Student section - both admins and teachers see this
-  { section: 'student', page: 'students',        icon: 'TrendingUp',         label: 'Progress' },
-
-  // Tools section - available to appropriate roles
-  { section: 'tools', page: 'examiners',        icon: 'UserCheck',          label: 'Examiner' },
-  { section: 'tools', page: 'settings',         icon: 'Settings',           label: 'Settings' },
+  // Other section - tools
+  { section: 'other',       page: 'examiners',     icon: 'UserCheck',       label: 'Examiner' },
+  { section: 'other',       page: 'settings',      icon: 'Settings',        label: 'Settings' },
 
   // Profile section - all users see this
-  { section: 'profile', page: 'profile',        icon: 'User',               label: 'Profile' },
+  { section: 'profile',     page: 'profile',       icon: 'User',            label: 'Profile' },
 ];
 
 /**
@@ -31,11 +29,11 @@ export const NAV_ITEMS = [
 export const ROLE_ACCESS = {
   admin: [
     'dashboard',
-    'schedule',
-    'log',
     'students',
-    'users',
     'lessonsAdmin',
+    'log',
+    'studentsAdmin',
+    'teachers',
     'examiners',
     'settings',
     'profile',
@@ -43,16 +41,14 @@ export const ROLE_ACCESS = {
 
   teacher: [
     'dashboard',
-    'schedule',
+    'students',       // Same progress page as admin (with student data)
     'log',
-    'students',       // Same students page as admin (with student data)
     'examiners',      // Examiner directory — view and edit examiners + notes
     'profile',
   ],
 
   student: [
     'dashboard',
-    'schedule',
     'student_progress', // Student's own progress
     'profile',
   ],

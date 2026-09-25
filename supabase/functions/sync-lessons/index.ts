@@ -127,13 +127,26 @@ Deno.serve(async (req: Request) => {
     if (dateFrom) rows = rows.filter((r) => r.scheduled_at.slice(0, 10) >= dateFrom);
     if (dateTo) rows = rows.filter((r) => r.scheduled_at.slice(0, 10) <= dateTo);
 
-    // --- 3. Resolve teachers & students (get-or-create in `users`) ---------
+    // --- 3. Resolve teachers & students in `users` -------------------------
+    // Teachers are NEVER auto-created (client decision 2026-09-23 — the
+    // import once invented teachers from misspelled names). Any teacher
+    // name that doesn't match an existing user aborts the sync.
     const isStr = (v: string | null): v is string => typeof v === "string" && v.length > 0;
     const teacherNames = [...new Set(rows.map((r) => r.teacher_name).filter(isStr))];
     const studentNames = [...new Set(rows.map((r) => r.student_name).filter(isStr))];
 
-    const teacherId = await resolveUsers(supabase, tenantId, "teacher", teacherNames, errors, dryRun);
-    const studentId = await resolveUsers(supabase, tenantId, "student", studentNames, errors, dryRun);
+    const teacherId = await resolveUsers(supabase, tenantId, "teacher", teacherNames, errors, dryRun, false);
+    const unresolvedTeachers = teacherNames.filter((n) => !teacherId.has(n));
+    if (unresolvedTeachers.length > 0) {
+      return json({
+        error: dryRun
+          ? "unresolved teacher names — fix them (parser aliases or users table) before syncing"
+          : "sync aborted: unresolved teacher names (teachers are never auto-created)",
+        unresolved_teachers: unresolvedTeachers,
+        hint: "Add the Excel spellings as INSTRUCTOR_ALIASES in excel_sync/parser.py, or correct the users table.",
+      }, 422);
+    }
+    const studentId = await resolveUsers(supabase, tenantId, "student", studentNames, errors, dryRun, true);
 
     // --- 4. Map rows onto lessons rows (deduped by natural key) ------------
     const lessonRows = new Map<string, Record<string, unknown>>();
@@ -205,8 +218,9 @@ Deno.serve(async (req: Request) => {
 
 /**
  * Get-or-create people in the `users` table for one role, scoped to the
- * tenant. Matching is case-insensitive on full_name. Missing names are
- * inserted with a fresh UUID (unless dryRun, which uses placeholders).
+ * tenant. Matching is case-insensitive on full_name. Missing names are only
+ * inserted when `createMissing` is true (students); otherwise (teachers)
+ * they are left unresolved and the caller decides — never auto-created.
  */
 async function resolveUsers(
   supabase: ReturnType<typeof createClient>,
@@ -215,6 +229,7 @@ async function resolveUsers(
   names: string[],
   errors: string[],
   dryRun: boolean,
+  createMissing: boolean,
 ): Promise<Map<string, string>> {
   const ids = new Map<string, string>();
   if (names.length === 0) return ids;
@@ -247,6 +262,10 @@ async function resolveUsers(
 
   const missing = names.filter((n) => !ids.has(n));
   if (missing.length === 0) return ids;
+  if (!createMissing) {
+    // Leave unresolved — the caller reports/aborts (teachers are never invented)
+    return ids;
+  }
 
   if (dryRun) {
     for (const n of missing) ids.set(n, `new_${role}_${slug(n)}`); // placeholder, never written

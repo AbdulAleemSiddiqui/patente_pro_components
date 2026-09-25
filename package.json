@@ -10,7 +10,6 @@
     "date-fns": "^4.4.0",
     "lucide-react": "latest",
     "react": "latest",
-    "react-big-calendar": "^1.20.0",
     "react-dom": "latest",
     "react-router-dom": "^7.17.0",
     "vite": "latest",

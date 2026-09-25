@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Car, CalendarDays, CalendarCheck, ClipboardList, Clock,
   LayoutDashboard, Route, Settings, UserCheck,
@@ -7,10 +7,21 @@ import {
 import { Toast } from './ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
 import { NAV_ITEMS, getNavItemsForRole } from '../lib/roleAccess.js';
+import { applyFavicon, logoDataUrlToFaviconIco } from '../lib/logo.js';
 
 export default function Layout({ page, navigate, lang, setLang, showToast, toast, t, children }) {
   const { session, role, full_name, logout, tenant } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Use the school logo (if the admin uploaded one) as the browser icon
+  useEffect(() => {
+    if (!tenant?.logo_url) return undefined;
+    let stale = false;
+    logoDataUrlToFaviconIco(tenant.logo_url)
+      .then((href) => { if (!stale) applyFavicon(href, tenant.logo_url); })
+      .catch((error) => console.error('Failed to build favicon', error));
+    return () => { stale = true; };
+  }, [tenant?.logo_url]);
 
   return (
     <div className="min-h-screen bg-white p-0 sm:p-5 text-ink">
@@ -22,6 +33,7 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
           role={role}
           full_name={full_name}
           logout={logout}
+          tenant={tenant}
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
         />
@@ -42,7 +54,7 @@ export default function Layout({ page, navigate, lang, setLang, showToast, toast
   );
 }
 
-function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, setMobileMenuOpen }) {
+function Sidebar({ page, navigate, t, role, full_name, logout, tenant, mobileMenuOpen, setMobileMenuOpen }) {
   const sections = useMemo(() => {
     const allowedItems = getNavItemsForRole(role);
 
@@ -93,11 +105,17 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
   const sidebarContent = (
     <>
       <div className="border-b border-white/10 px-4 pb-3 pt-[18px]">
-        <div className="flex items-center gap-2 text-[15px] font-medium">
-          <Car size={17} />
-          {t.appTitle}
-        </div>
-        <div className="mt-0.5 text-[11px] text-white/50">{t.appSubtitle}</div>
+        {tenant?.logo_url ? (
+          <img
+            src={tenant.logo_url}
+            alt={tenant?.name || t.appTitle}
+            className="mx-auto h-28 w-[85%] rounded-lg object-contain"
+          />
+        ) : (
+          <div className="mx-auto grid h-28 w-[85%] place-items-center rounded-lg bg-white/10">
+            <Car size={40} />
+          </div>
+        )}
       </div>
 
       {Object.entries(sections).map(([section, items]) => (
@@ -169,7 +187,7 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
             className="fixed inset-0 z-40 bg-black/50 md:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-[260px] flex-col bg-brand text-white md:hidden shadow-xl">
+          <aside className="fixed inset-y-0 left-0 z-50 w-[55%] max-w-[220px] flex-col bg-brand text-white md:hidden shadow-xl">
             {sidebarContent}
           </aside>
         </>
@@ -181,21 +199,21 @@ function Sidebar({ page, navigate, t, role, full_name, logout, mobileMenuOpen, s
 function TopHeader({ lang, setLang, t, tenant, mobileMenuOpen, setMobileMenuOpen }) {
   return (
     <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-5 py-2.5">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {/* Hamburger menu button - only shown on mobile */}
         <button
-          className="md:hidden flex items-center justify-center rounded-md p-2 hover:bg-gray-100 transition"
+          className="md:hidden flex shrink-0 items-center justify-center rounded-md p-1.5 hover:bg-gray-100 transition sm:p-2"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           aria-label={t.toggleMenu}
         >
-          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
-        <span className="text-[15px] text-muted">
+        <span className="truncate text-[13px] text-muted sm:text-[15px]">
           {t.welcomeTo || 'Welcome to'}{' '}
           <span className="font-bold" style={{ color: '#1A3A5C' }}>{tenant?.name || t.appTitle}</span>
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <SegmentedLanguage lang={lang} setLang={setLang} t={t} />
       </div>
     </header>
@@ -204,11 +222,11 @@ function TopHeader({ lang, setLang, t, tenant, mobileMenuOpen, setMobileMenuOpen
 
 function SegmentedLanguage({ lang, setLang, t }) {
   return (
-    <div className="flex rounded-full border border-line bg-white p-0.5" aria-label={t.language}>
+    <div className="flex shrink-0 rounded-full border border-line bg-white p-0.5" aria-label={t.language}>
       {['en', 'it'].map((code) => (
         <button
           key={code}
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium transition sm:px-2.5 sm:py-1 sm:text-xs ${
             lang === code ? 'bg-brand text-white' : 'text-muted hover:text-ink'
           }`}
           onClick={() => setLang(code)}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import {
   Button, Card, Field, fieldClass, Page, PageHeader,
 } from '../components/ui.jsx';
@@ -15,6 +15,8 @@ export default function ExaminersPage({ showToast, t }) {
   const [examiners, setExaminers] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [examinerModal, setExaminerModal] = useState(null);
+  const [notesModal, setNotesModal] = useState(null);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -47,7 +49,12 @@ export default function ExaminersPage({ showToast, t }) {
     });
   };
 
-  const selected = examiners.find((e) => e.id === selectedId) || null;
+  // Case-insensitive filter over name and notes
+  const filtered = examiners.filter((e) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return e.name.toLowerCase().includes(q) || (e.notes || '').toLowerCase().includes(q);
+  });
 
   const openCreateExaminer = () => setExaminerModal(emptyExaminer());
 
@@ -118,63 +125,76 @@ export default function ExaminersPage({ showToast, t }) {
         }
       />
 
-      {/* Top section — examiner list (select one, edit/delete in the row) */}
-      <Card title={t.examinersTitle}>
+      {/* Examiner list */}
+      <Card>
         {examiners.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted">{t.examinersEmpty}</div>
         ) : (
-          <div className="max-h-[20vh] divide-y divide-line overflow-y-auto">
-            {examiners.map((examiner) => (
-              <div
-                key={examiner.id}
-                className={`flex items-center gap-3 px-4 py-3 transition ${
-                  selectedId === examiner.id ? 'bg-brand-light/60' : 'hover:bg-[#fafafa]'
-                }`}
-              >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => setSelectedId(examiner.id)}
-                >
-                  <div className="truncate text-sm font-medium">{examiner.name}</div>
-                  {examiner.notes && (
-                    <div className="truncate text-xs text-muted">{examiner.notes}</div>
-                  )}
-                </button>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEditExaminer(examiner)}
-                    className="rounded p-1.5 text-muted hover:bg-gray-100 hover:text-ink"
-                    title={t.edit}
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeExaminer(examiner.id)}
-                    className="rounded p-1.5 text-muted hover:bg-red-50 hover:text-accent"
-                    title={t.examinerDelete}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
+          <>
+            {/* Search */}
+            <div className="border-b border-line p-3">
+              <div className="relative">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t.search}
+                  className="h-9 w-full rounded-md border border-line bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-muted focus:border-brand"
+                />
               </div>
-            ))}
-          </div>
-        )}
-      </Card>
+            </div>
 
-      {/* Bottom section — full-width, multi-line notes of the selected examiner */}
-      <Card title={selected ? `${t.examinerNotes} · ${selected.name}` : t.examinerNotes}>
-        {selected ? (
-          selected.notes ? (
-            <div className="max-h-[80vh] overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed">{selected.notes}</div>
-          ) : (
-            <div className="p-4 text-sm text-muted">{t.examinerNoNotes}</div>
-          )
-        ) : (
-          <div className="p-4 text-sm text-muted">{t.examinerSelectPrompt}</div>
+            {filtered.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted">{t.examinersNotFound}</div>
+            ) : (
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-white">
+              <tr>
+                <th className="w-1/4 px-4 py-2 text-left font-medium">{t.examinerName}</th>
+                <th className="px-4 py-2 text-left font-medium">{t.examinerNotes}</th>
+                <th className="w-20 px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {filtered.map((examiner) => (
+                <tr
+                  key={examiner.id}
+                  className={`cursor-pointer align-top transition ${
+                    selectedId === examiner.id ? 'bg-brand-light/60' : 'hover:bg-[#fafafa]'
+                  }`}
+                  onClick={() => { setSelectedId(examiner.id); setNotesModal(examiner); }}
+                >
+                  <td className="px-4 py-3 font-medium">{examiner.name}</td>
+                  <td className="line-clamp-4 whitespace-pre-wrap px-4 py-3 leading-relaxed text-muted">
+                    {examiner.notes || <span className="text-muted/60">{t.examinerNoNotes}</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openEditExaminer(examiner); }}
+                        className="rounded p-1.5 text-muted hover:bg-gray-100 hover:text-ink"
+                        title={t.edit}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); removeExaminer(examiner.id); }}
+                        className="rounded p-1.5 text-muted hover:bg-red-50 hover:text-accent"
+                        title={t.examinerDelete}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+            )}
+          </>
         )}
       </Card>
 
@@ -219,6 +239,25 @@ export default function ExaminersPage({ showToast, t }) {
                   {examinerModal.id ? t.saveChanges : t.laCreate}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Full notes modal (open on row click) */}
+      {notesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setNotesModal(null)}>
+          <div
+            className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-medium">{notesModal.name}</h2>
+              <button onClick={() => setNotesModal(null)} className="rounded p-1 text-muted hover:bg-gray-100">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed">
+              {notesModal.notes || t.examinerNoNotes}
             </div>
           </div>
         </div>

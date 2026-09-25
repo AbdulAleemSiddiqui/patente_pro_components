@@ -18,16 +18,21 @@ export async function listUsers({ tenantId, role } = {}) {
   return data;
 }
 
-export async function updateUser({ userId, fullName, phone }) {
+export async function updateUser({ userId, fullName, phone, category, branch, isActive }) {
   const client = requireSupabase();
 
   // Update public.users table
+  const updateData = {
+    full_name: fullName,
+    phone: phone || null,
+  };
+  if (category !== undefined) updateData.category = category || null;
+  if (branch !== undefined) updateData.branch = branch || null;
+  if (isActive !== undefined) updateData.is_active = isActive;
+
   const { data, error } = await client
     .from('users')
-    .update({
-      full_name: fullName,
-      phone: phone || null,
-    })
+    .update(updateData)
     .eq('id', userId)
     .select()
     .single();
@@ -50,37 +55,82 @@ export async function updateUser({ userId, fullName, phone }) {
   return data;
 }
 
-export async function listLessons({ tenantId, teacherId, studentId } = {}) {
+/**
+ * Lightweight lesson fetch — names and (optionally) ratings only, never the
+ * full nested feedback payload. Powers lists, counts and conflict checks.
+ * Pass `limit`/`offset` for one server-side page; the result is then
+ * { rows, count }, otherwise a plain array (all rows, paged internally).
+ */
+export async function listLessonsLite({
+  tenantId, teacherId, studentId, status, kind, from, to,
+  withRatings = false, limit, offset = 0,
+} = {}) {
   const client = requireSupabase();
-  let query = client
-    .from('lessons')
-    .select('*, teacher:users!lessons_teacher_id_fkey(*), student:users!lessons_student_id_fkey(*)')
-    .order('scheduled_at');
+  const select = `id, status, scheduled_at, duration_minutes, student_id, teacher_id,
+    teacher:users!lessons_teacher_id_fkey(full_name),
+    student:users!lessons_student_id_fkey(full_name)
+    ${
+      withRatings
+        ? ', feedback:lesson_feedback(general_rating, ratings:maneuver_ratings(rating, maneuver:maneuvers(name)))'
+        : ', feedback:lesson_feedback(general_rating)'
+    }`;
 
-  query = byTenant(query, tenantId);
-  if (teacherId) query = query.eq('teacher_id', teacherId);
-  if (studentId) query = query.eq('student_id', studentId);
+  const pageQuery = (rangeFrom, wantCount) => {
+    let q = client
+      .from('lessons')
+      .select(select, wantCount ? { count: 'exact' } : undefined)
+      // newest first; id as tiebreaker for stable range paging
+      .order('scheduled_at', { ascending: false })
+      .order('id');
+    q = byTenant(q, tenantId);
+    if (teacherId) q = q.eq('teacher_id', teacherId);
+    if (studentId) q = q.eq('student_id', studentId);
+    if (status) q = q.eq('status', status);
+    if (kind) q = q.eq('kind', kind);
+    if (from) q = q.gte('scheduled_at', from);
+    if (to) q = q.lte('scheduled_at', to);
+    const size = limit ?? LESSONS_PAGE;
+    const start = limit !== undefined ? offset + rangeFrom : rangeFrom;
+    return q.range(start, start + size - 1);
+  };
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
+  if (limit !== undefined) {
+    const { data, error, count } = await pageQuery(0, true);
+    if (error) throw error;
+    return { rows: data ?? [], count: count ?? 0 };
+  }
+
+  // PostgREST silently caps single requests (Supabase default: 1000 rows) —
+  // the sheet import puts thousands of lessons in this table, so page through.
+  const all = [];
+  for (let r = 0; ; r += LESSONS_PAGE) {
+    const { data, error } = await pageQuery(r, false);
+    if (error) throw error;
+    all.push(...(data ?? []));
+    if (!data || data.length < LESSONS_PAGE) break;
+  }
+  return all;
 }
 
 /**
- * Lessons with their feedback (notes, general_rating, highways) and maneuver
- * ratings (with maneuver + parent type) nested in. Powers the Progress page.
+ * Lessons with their feedback (notes, general_rating, highway segments) and
+ * maneuver ratings (with maneuver + parent type) nested in. Powers the
+ * Progress page and the read-only lesson history view.
  */
-export async function listLessonsWithFeedback({ tenantId, teacherId, studentId } = {}) {
+export async function listLessonsWithFeedback({ tenantId, teacherId, studentId, lessonId } = {}) {
   const client = requireSupabase();
   const SELECT = `id, status, scheduled_at, duration_minutes, student_id, teacher_id,
     teacher:users!lessons_teacher_id_fkey(id, full_name),
     student:users!lessons_student_id_fkey(id, full_name),
     feedback:lesson_feedback(
       notes, general_rating,
-      from_highway:highways!lesson_feedback_from_highway_id_fkey(id, name),
-      to_highway:highways!lesson_feedback_to_highway_id_fkey(id, name),
+      segments:lesson_feedback_highways(
+        sort_order,
+        from_highway:highways!lesson_feedback_highways_from_fkey(id, name),
+        to_highway:highways!lesson_feedback_highways_to_fkey(id, name)
+      ),
       ratings:maneuver_ratings(
-        rating,
+        rating, maneuver_id,
         maneuver:maneuvers(id, name, order_index, type:maneuver_types(id, name, order_index))
       )
     )`;
@@ -95,6 +145,7 @@ export async function listLessonsWithFeedback({ tenantId, teacherId, studentId }
     q = byTenant(q, tenantId);
     if (teacherId) q = q.eq('teacher_id', teacherId);
     if (studentId) q = q.eq('student_id', studentId);
+    if (lessonId) q = q.eq('id', lessonId);
     return q.range(from, from + LESSONS_PAGE - 1);
   };
 
@@ -111,43 +162,75 @@ export async function listLessonsWithFeedback({ tenantId, teacherId, studentId }
 }
 
 /**
- * List teacher availability blocks for a date range
+ * List branch catalogs (label + color) for tenant
  */
-export async function listTeacherAvailability({ tenantId, teacherId, from, to } = {}) {
+export async function listBranches({ tenantId } = {}) {
   const client = requireSupabase();
-  let query = client.from('teacher_availability').select('*').order('start_at');
-
+  let query = client.from('branches').select('*').order('label');
   query = byTenant(query, tenantId);
-  if (teacherId) query = query.eq('teacher_id', teacherId);
-  if (from) query = query.gte('end_at', from);
-  if (to) query = query.lte('start_at', to);
-
   const { data, error } = await query;
   if (error) throw error;
   return data;
 }
 
-/**
- * Create a new teacher availability block
- */
-export async function createTeacherAvailability({ tenantId, teacherId, startAt, endAt }) {
+export async function createBranch({ tenantId, label, color }) {
   const client = requireSupabase();
   const { data, error } = await client
-    .from('teacher_availability')
-    .insert({ tenant_id: tenantId, teacher_id: teacherId, start_at: startAt, end_at: endAt })
+    .from('branches')
+    .insert({ tenant_id: tenantId, label, color: color || '#2563eb' })
     .select()
     .single();
-
   if (error) throw error;
   return data;
 }
 
-/**
- * Delete a teacher availability block
- */
-export async function deleteTeacherAvailability({ id }) {
+export async function updateBranch({ id, label, color }) {
   const client = requireSupabase();
-  const { error } = await client.from('teacher_availability').delete().eq('id', id);
+  const updateData = {};
+  if (label !== undefined) updateData.label = label;
+  if (color !== undefined) updateData.color = color;
+  const { data, error } = await client
+    .from('branches')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteBranch({ id }) {
+  const client = requireSupabase();
+  const { error } = await client.from('branches').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * List category catalogs (label + color) for tenant
+ */
+export async function listCategories({ tenantId } = {}) {
+  const client = requireSupabase();
+  let query = client.from('categories').select('*').order('label');
+  query = byTenant(query, tenantId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function createCategory({ tenantId, label, color }) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('categories')
+    .insert({ tenant_id: tenantId, label, color: color || '#1a3a5c' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCategory({ id }) {
+  const client = requireSupabase();
+  const { error } = await client.from('categories').delete().eq('id', id);
   if (error) throw error;
 }
 
@@ -158,10 +241,12 @@ export async function getTenant({ tenantId } = {}) {
   return data;
 }
 
-export async function updateTenant({ tenantId, name }) {
+export async function updateTenant({ tenantId, name, logoUrl }) {
   const client = requireSupabase();
   const updateData = {};
   if (name !== undefined) updateData.name = name;
+  // null clears the logo (back to the default icon)
+  if (logoUrl !== undefined) updateData.logo_url = logoUrl;
 
   const { data, error } = await client
     .from('tenants')
@@ -205,6 +290,40 @@ export async function updateManeuver({ id, name }) {
 
   if (error) throw error;
   return data;
+}
+
+export async function createManeuver({ tenantId, typeId, name }) {
+  const client = requireSupabase();
+  // Append after the last maneuver of the same type
+  const { data: last, error: maxError } = await client
+    .from('maneuvers')
+    .select('order_index')
+    .eq('tenant_id', tenantId)
+    .eq('maneuver_type_id', typeId)
+    .order('order_index', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (maxError) throw maxError;
+
+  const { data, error } = await client
+    .from('maneuvers')
+    .insert({
+      tenant_id: tenantId,
+      maneuver_type_id: typeId,
+      name,
+      order_index: (last?.order_index ?? 0) + 1,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteManeuver({ id }) {
+  const client = requireSupabase();
+  // Ratings cascade from the maneuver
+  const { error } = await client.from('maneuvers').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export async function listErrorTags({ tenantId } = {}) {
@@ -280,6 +399,27 @@ export async function deleteExaminer({ id }) {
   if (error) throw error;
 }
 
+/**
+ * Server-side aggregates — keep the Progress and Database pages fast by
+ * never downloading every lesson with its feedback payload.
+ */
+export async function getStudentProgressStats({ tenantId } = {}) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('get_student_progress', { p_tenant: tenantId });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getDashboardStats({ tenantId, day } = {}) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('get_dashboard_stats', {
+    p_tenant: tenantId,
+    p_day: day, // client-local date (YYYY-MM-DD)
+  });
+  if (error) throw error;
+  return data || {};
+}
+
 export async function createLesson(payload) {
   const client = requireSupabase();
   const { data, error } = await client.from('lessons').insert(payload).select().single();
@@ -314,7 +454,7 @@ export async function deleteLesson({ id }) {
   if (error) throw error;
 }
 
-export async function submitLessonFeedback({ feedback, maneuverRatings, errorTagIds }) {
+export async function submitLessonFeedback({ feedback, highwaySegments, maneuverRatings, errorTagIds }) {
   const client = requireSupabase();
 
   // First check if feedback already exists for this lesson
@@ -335,8 +475,6 @@ export async function submitLessonFeedback({ feedback, maneuverRatings, errorTag
       .update({
         notes: feedback.notes,
         general_rating: feedback.general_rating,
-        from_highway_id: feedback.from_highway_id ?? null,
-        to_highway_id: feedback.to_highway_id ?? null,
       })
       .eq('id', existingFeedback.id)
       .select()
@@ -362,6 +500,29 @@ export async function submitLessonFeedback({ feedback, maneuverRatings, errorTag
 
     if (feedbackError) throw feedbackError;
     savedFeedback = data;
+  }
+
+  // Replace highway segments (delete + reinsert, same pattern as ratings)
+  const { error: segDeleteError } = await client
+    .from('lesson_feedback_highways')
+    .delete()
+    .eq('lesson_feedback_id', savedFeedback.id);
+  if (segDeleteError) throw segDeleteError;
+
+  const segments = (highwaySegments || [])
+    .map((seg, index) => ({
+      lesson_feedback_id: savedFeedback.id,
+      from_highway_id: seg.from_highway_id || null,
+      to_highway_id: seg.to_highway_id || null,
+      sort_order: index,
+    }))
+    .filter((seg) => seg.from_highway_id || seg.to_highway_id);
+
+  if (segments.length) {
+    const { error: segError } = await client
+      .from('lesson_feedback_highways')
+      .insert(segments);
+    if (segError) throw segError;
   }
 
   // Insert maneuver ratings

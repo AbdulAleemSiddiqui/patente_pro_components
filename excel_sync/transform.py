@@ -80,8 +80,8 @@ TAG_RE = re.compile(
 TRAILING_KIND_RE = re.compile(r"\s+(CQC|ADR)$")
 # Trailing annotations that imply a kind for the name in front of them.
 TRAILING_NOTES = [
-    (re.compile(r"\s+PRE[.\s-]*ESAM[IE]*$"), "exam"),          # "SCARFO' PRE ESAME"
-    (re.compile(r"\s+ESP\.?\s*(?:(?:DI\s+)?(?:GUIDA|CONTR))?$"), "exam"),  # "ESPGUIDA"
+    (re.compile(r"\s+PRE[.\s-]*ESAM[IE]*$"), "simulation"),          # "SCARFO' PRE ESAME"
+    (re.compile(r"\s+ESP\.?\s*(?:(?:DI\s+)?(?:GUIDA|CONTR))?$"), "simulation"),  # "ESPGUIDA"
     (re.compile(r"\s+NON\s+\S+\s+VENUT.*$"), "note"),          # "DI BLASI NON È VENUTA"
 ]
 
@@ -94,8 +94,8 @@ KEYWORD_RULES = [
     (r"^FERI[AE]\b|^FERIA\b|^FEFERIE\b|^1/2 FERIA\b", "ferie"),
     (r"^U[F]{1,2}ICIO\b|^LAVORI UFF\b|^UFF\b", "office"),
     (r"^TEI?ORIA\b", "theory"),  # TEORIA + the "TEIORIA" typo
-    (r"^QUIZ\b|\bESAM", "exam"),  # bare quiz sessions, "APPUNTAMENTO ESAME"
-    (r"^REV", "exam"),  # REV QUIZ / REV GUIDA / REVI / REVISIONE
+    (r"^QUIZ\b|\bESAM", "simulation"),  # bare quiz sessions, "APPUNTAMENTO ESAME"
+    (r"^REV", "simulation"),  # REV QUIZ / REV GUIDA / REVI / REVISIONE
     (r"^GUIDA\b|^GUIDE\b", "lesson"),  # unnamed driving lesson
     (r"\bADR\b|^CORSO ADR\b", "adr"),
     (r"^DTT\b|^CML\b|^CAM\.?\s*(?:COMM|DI COMM)|^CAMCOM\b", "dtt"),
@@ -105,7 +105,7 @@ KEYWORD_RULES = [
     (r"^NAOMI[E]?\s*(E\s*)?SERENA\b|^LEZ\.?\s*COLLETTIVA\b", "group_lesson"),
     (r"^AFFIANCAMENTO\b|^CON\b", "shadowing"),  # "CON PAOLO" = with teacher
     (r"^AUTOSERVICE\b", "autoservice"),
-    (r"^ESP\.?\s*DI\s*(GUIDA|CONTROLLO)|^ESPERIMENTO DI GUIDA\b", "exam"),
+    (r"^ESP\.?\s*DI\s*(GUIDA|CONTROLLO)|^ESPERIMENTO DI GUIDA\b", "simulation"),
     (r"^CORSO\b", "meeting"),
     # Car / garage logistics
     (r"^(PANDA\d?|PRENDERE|PORTARE|RIPORTARE|RIP\.?\s*PANDA|RITIRARE|RITIRO|TAGLIANDO"
@@ -116,9 +116,9 @@ KEYWORD_RULES = [
 # Keyword prefixes: the match may leave a student name behind.
 PREFIX_RULES = [
     # exam prefixes: "ES GUIDA", "ES.GUIDA", "ESGUIDA", "ES QUIZ REV", "ES CQC", ...
-    (r"^(?:ES|ESAME|ESAMI)\b[\s.:]*|^(?:ES)(?=(?:GUIDA|QUIZ|CQC|ADR|CAP|KB|REV|ES))", "exam"),
-    (r"^PRE[.\s-]*(?:ESAM[IE]*|ES|SAME)\b", "exam"),  # PRE-ESAMI, PRE ES, PRE SAME
-    (r"^REVISIONE\b", "exam"),
+    (r"^(?:ES|ESAME|ESAMI)\b[\s.:]*|^(?:ES)(?=(?:GUIDA|QUIZ|CQC|ADR|CAP|KB|REV|ES))", "simulation"),
+    (r"^PRE[.\s-]*(?:ESAM[IE]*|ES|SAME)\b", "simulation"),  # PRE-ESAMI, PRE ES, PRE SAME
+    (r"^REVISIONE\b", "simulation"),
     (r"^(?:REC\.?\s*PUN[IT][IO]?|RECPUNTI|RECUPERO(?:\s+PUNTI)?|R?C\.?\s*PUNT[IO]?|REC)\b",
      "points_recovery"),
     (r"^(?:RINN\.?\s*(?:CQC)?|RIN CQC|RINNCQC|RINNOVO(?:\s+CQC)?|REG(?:ISTR)?\.?\s*CQC)\b",

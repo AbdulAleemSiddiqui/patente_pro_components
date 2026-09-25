@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { TrendingUp, Calendar, Award, CheckCircle } from 'lucide-react';
 import { Card, Page, PageHeader } from '../components/ui.jsx';
 import useAuthStore from '../store/useAuthStore.js';
-import { listLessons } from '../lib/api.js';
 import { format } from 'date-fns';
 
 export default function StudentProgressPage({ showToast, t, lang }) {
@@ -44,7 +43,10 @@ export default function StudentProgressPage({ showToast, t, lang }) {
             )
           `)
           .eq('student_id', session.user.id)
-          .in('status', ['completed', 'feedback_submitted'])
+          // lesson_status enum only has scheduled/completed/cancelled — an
+          // earlier .in(['completed','feedback_submitted']) silently matched
+          // against an invalid value
+          .eq('status', 'completed')
           .order('scheduled_at', { ascending: false });
 
         if (error) throw error;
@@ -57,21 +59,19 @@ export default function StudentProgressPage({ showToast, t, lang }) {
     })();
   }, [session]);
 
-  // Calculate statistics
-  const completedLessons = lessons.filter(l => l.lesson_feedback);
-  const recentFeedback = completedLessons.slice(0, 5);
+  // Calculate statistics — every completed lesson counts, feedback or not
+  const recentFeedback = lessons.filter((l) => l.lesson_feedback).slice(0, 5);
 
-  // Calculate general average
+  // Calculate general average over lessons that actually carry a known rating
+  // (unknown ratings are skipped, not defaulted — a default inflated the average)
   const calculateAverage = () => {
-    if (completedLessons.length === 0) return null;
-
     const ratingValues = { poor: 1, fair: 2, good: 3 };
-    const sum = completedLessons.reduce((acc, lesson) => {
-      const rating = lesson.lesson_feedback?.general_rating;
-      return acc + (ratingValues[rating] || 2);
-    }, 0);
+    const vals = lessons
+      .map((l) => ratingValues[l.lesson_feedback?.general_rating])
+      .filter((v) => v != null);
+    if (vals.length === 0) return null;
 
-    const average = sum / completedLessons.length;
+    const average = vals.reduce((a, b) => a + b, 0) / vals.length;
     if (average >= 2.5) return { text: 'good', color: 'text-green-500', label: t.excellent };
     if (average >= 1.5) return { text: 'fair', color: 'text-orange-500', label: t.good };
     return { text: 'poor', color: 'text-red-500', label: t.needsImprovement };
@@ -102,7 +102,7 @@ export default function StudentProgressPage({ showToast, t, lang }) {
                 <CheckCircle size={20} />
               </div>
               <div>
-                <div className="text-2xl font-bold">{completedLessons.length}</div>
+                <div className="text-2xl font-bold">{lessons.length}</div>
                 <div className="text-sm text-muted">{t.lessonsCompleted}</div>
               </div>
             </div>
@@ -142,7 +142,7 @@ export default function StudentProgressPage({ showToast, t, lang }) {
               </div>
               <div>
                 <div className="text-2xl font-bold">
-                  {completedLessons.length > 0 ? t.spStatusActive : t.spStatusStart}
+                  {lessons.length > 0 ? t.spStatusActive : t.spStatusStart}
                 </div>
                 <div className="text-sm text-muted">{t.spLearningStatus}</div>
               </div>
@@ -153,7 +153,7 @@ export default function StudentProgressPage({ showToast, t, lang }) {
 
       {/* Recent Feedback */}
       <Card title={t.recentFeedback}>
-        {completedLessons.length === 0 ? (
+        {lessons.length === 0 ? (
           <div className="p-8 text-center text-muted">
             <div className="text-sm">{t.noLessonsYet}</div>
           </div>

@@ -28,9 +28,11 @@ export const supabaseAdmin = supabaseUrl && supabaseServiceRoleKey
  * @param {string} params.phone - Optional phone number
  * @param {'teacher'|'student'} params.role - User role
  * @param {string} params.tenantId - Current tenant ID
+ * @param {string} [params.category] - License category (students only)
+ * @param {string} [params.branch] - Branch (students only)
  * @returns {Promise<{success: boolean, userId?: string, error?: string}>}
  */
-export async function createUser({ email, password, fullName, phone, role, tenantId }) {
+export async function createUser({ email, password, fullName, phone, role, tenantId, category, branch }) {
   if (!supabaseAdmin) {
     return { success: false, error: 'Service role key not configured' };
   }
@@ -70,6 +72,8 @@ export async function createUser({ email, password, fullName, phone, role, tenan
         full_name: fullName,
         email,
         phone: phone || null,
+        category: category || null,
+        branch: branch || null,
         is_active: true,
       });
 
@@ -84,6 +88,43 @@ export async function createUser({ email, password, fullName, phone, role, tenan
     return { success: true, userId };
   } catch (error) {
     console.error('Failed to create user:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Set a new password for a user (admin password reset)
+ * Uses the service role key, so no email confirmation is needed
+ *
+ * @param {string} userId - User ID whose password changes
+ * @param {string} password - New password (min 6 chars, Supabase default)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function updateUserPassword({ userId, password }) {
+  if (!supabaseAdmin) {
+    return { success: false, error: 'Service role key not configured' };
+  }
+
+  try {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Stamp public.users so the directory can show when it last changed
+    const { error: stampError } = await supabaseAdmin
+      .from('users')
+      .update({ last_password_change: new Date().toISOString() })
+      .eq('id', userId);
+    if (stampError) {
+      // Password was changed; the stamp is secondary — report success but log
+      console.error('Failed to stamp last_password_change:', stampError);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to update password:', error);
     return { success: false, error: error.message };
   }
 }
@@ -139,6 +180,46 @@ export async function deleteUser(userId) {
     return { success: true };
   } catch (error) {
     console.error('Failed to delete user:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete a user together with everything that references them.
+ * lessons.teacher_id / student_id and swap_requests have no ON DELETE
+ * cascade, so their rows must be removed first (feedback and maneuver
+ * ratings cascade from lessons).
+ *
+ * @param {string} userId - User ID to delete
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function deleteUserWithData({ userId }) {
+  if (!supabaseAdmin) {
+    return { success: false, error: 'Service role key not configured' };
+  }
+
+  try {
+    // swap_requests reference users directly (no cascade)
+    for (const column of ['requesting_teacher_id', 'target_teacher_id']) {
+      const { error } = await supabaseAdmin
+        .from('swap_requests')
+        .delete()
+        .eq(column, userId);
+      if (error) return { success: false, error: error.message };
+    }
+
+    // lessons reference users directly; feedback/ratings cascade from lessons
+    for (const column of ['student_id', 'teacher_id']) {
+      const { error } = await supabaseAdmin
+        .from('lessons')
+        .delete()
+        .eq(column, userId);
+      if (error) return { success: false, error: error.message };
+    }
+
+    return deleteUser(userId);
+  } catch (error) {
+    console.error('Failed to delete user with data:', error);
     return { success: false, error: error.message };
   }
 }

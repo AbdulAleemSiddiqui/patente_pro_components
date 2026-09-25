@@ -199,13 +199,19 @@ export default function ProfilePage({ showToast, t, lang }) {
               <Lock size={16} className="text-muted" />
               <div>
                 <div className="text-sm font-medium">{t.profilePasswordLabel}</div>
-                <div className="text-[13px] text-muted">{t.profileResetDescription}</div>
+                <div className="text-[13px] text-muted">
+                  {role === 'admin' ? t.profileResetDescription : t.profilePasswordAskAdmin}
+                </div>
               </div>
             </div>
-            <Button small disabled className="opacity-60" title={t.comingSoon}>
-              <Clock size={12} />
-              <span className="ml-1">{t.comingSoon}</span>
-            </Button>
+            {role === 'admin' ? (
+              <Button small disabled className="opacity-60" title={t.comingSoon}>
+                <Clock size={12} />
+                <span className="ml-1">{t.comingSoon}</span>
+              </Button>
+            ) : (
+              <Badge tone="muted">{t.profileAskAdmin}</Badge>
+            )}
           </div>
         </div>
       </Card>
